@@ -1,0 +1,20 @@
+# Devenv
+.devenv*
+!.devenv.flake.nix
+devenv.local.nix
+devenv.local.yaml
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml
+
+external/
+
+.mypy_cache/
+.ropeproject
+.pytest_cache/
+.venv
+
+**/__pycache__/

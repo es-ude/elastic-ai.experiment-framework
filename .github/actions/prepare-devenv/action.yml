@@ -1,0 +1,11 @@
+name: "Prepare Devenv"
+description: "Prepare the development environment using devenv shell"
+runs:
+  using: "composite"
+  steps:
+    - uses: cachix/install-nix-action@v25
+    - uses: cachix/cachix-action@v15
+      with:
+        name: devenv
+    - run: nix profile install nixpkgs/nixos-25.11#devenv
+      shell: bash
