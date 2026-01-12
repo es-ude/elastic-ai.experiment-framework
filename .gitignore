@@ -18,3 +18,4 @@ external/
 .venv
 
 **/__pycache__/
+.coverage

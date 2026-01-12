@@ -14,13 +14,18 @@
   ];
 
   
-
   languages.python = {
     enable = true;
+    package = pkgs.python312;
     uv.enable = true;
+    uv.sync.enable = true;
+    uv.sync.allExtras = true;
   };
 
-   "check:fast-tests" = {
+  tasks = let
+    uv_run = "${pkgs.uv}/bin/uv run";
+  in {
+    "check:fast-tests" = {
       exec = ''
         ${uv_run} coverage run
         ${uv_run} coverage xml
@@ -29,7 +34,7 @@
     };
 
     "check:types" = {
-      exec = "${uv_run} mypy -p elasticai.creator";
+      exec = "${uv_run} mypy -p elasticai.experiment_framework";
       before = ["check:code-lint"];
     };
 
@@ -59,7 +64,7 @@
     };
 
     "package:build" = {
-      exec = "${unstablePkgs.uv}/bin/uv build";
+      exec = "${pkgs.uv}/bin/uv build";
     };
 
      "check:code-lint" = {
@@ -67,5 +72,6 @@
 
     "check:tests" = {
     }; # this is triggered in CI with --mode before flag
+  };
 
 }

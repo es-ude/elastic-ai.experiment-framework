@@ -11,7 +11,7 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["elasticai"]
+packages = ["src/elasticai"]
 exclude = ["*_test.py", "test_*.py"]
 
 
@@ -31,3 +31,12 @@ dev = [
     "python-lsp-server>=1.14.0",
     "tach>=0.33.0",
 ]
+
+
+[tool.coverage.run]
+omit = [
+    "tests/*py",
+    "src/elasticai/experiment_framework/*_test.py", # not testable
+]
+source = ["src/elasticai/experiment_framework"]
+command_line = "-m pytest"

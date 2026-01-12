@@ -1,4 +1,4 @@
-from .message import Message
+from elasticai.experiment_framework.message import Message
 
 
 def test_to_and_from_bytes_are_equal():

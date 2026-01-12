@@ -1,0 +1,42 @@
+interfaces = []
+exclude = [
+    "**/*__pycache__",
+    "**/*egg-info",
+    "**/docs",
+    "**/tests",
+    "**/venv",
+]
+source_roots = [ "src",
+]
+
+[[modules ]]
+path = "elasticai.experiment_framework.remote_control"
+depends_on = ["elasticai.experiment_framework.io_stream", "elasticai.experiment_framework.remote_control_protocol"]
+
+[[modules ]]
+path = "elasticai.experiment_framework.message_builder"
+depends_on = ["elasticai.experiment_framework.message", "elasticai.experiment_framework.commands"]
+
+[[modules ]]
+path = "elasticai.experiment_framework.io_stream"
+depends_on = []
+
+[[modules ]]
+path = "elasticai.experiment_framework.message_io"
+depends_on = ["elasticai.experiment_framework.commands", "elasticai.experiment_framework.message", "elasticai.experiment_framework.io_stream"]
+
+[[modules ]]
+path = "elasticai.experiment_framework.message"
+depends_on = ["elasticai.experiment_framework.commands"]
+
+[[modules ]]
+path = "elasticai.experiment_framework.remote_control_protocol"
+depends_on = ["elasticai.experiment_framework.commands", "elasticai.experiment_framework.io_stream", "elasticai.experiment_framework.message_builder", "elasticai.experiment_framework.message_chunks_receiver", "elasticai.experiment_framework.message_io"]
+
+[[modules ]]
+path = "elasticai.experiment_framework.message_chunks_receiver"
+depends_on = ["elasticai.experiment_framework.message_io", "elasticai.experiment_framework.commands"]
+
+[[modules ]]
+path = "elasticai.experiment_framework.commands"
+depends_on = []

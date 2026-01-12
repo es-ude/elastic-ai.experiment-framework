@@ -1,10 +1,10 @@
 import pytest
 
-from .commands import Command
-from .io_stream import IOStream
-from .message import Message
-from .message_builder import MessageBuilder
-from .message_io import MessageIO
+from elasticai.experiment_framework.commands import Command
+from elasticai.experiment_framework.io_stream import IOStream
+from elasticai.experiment_framework.message import Message
+from elasticai.experiment_framework.message_builder import MessageBuilder
+from elasticai.experiment_framework.message_io import MessageIO
 
 
 @pytest.fixture
@@ -18,9 +18,9 @@ class DummyIO(IOStream):
         self.current_read_pos = 0
         self.rx = bytearray()
 
-    def read(self, n_bytes: int) -> bytes:
+    def read(self, num_bytes: int) -> bytes:
         old_pos = self.current_read_pos
-        self.current_read_pos += n_bytes
+        self.current_read_pos += num_bytes
         v = self.tx[old_pos : self.current_read_pos]
         return v
 
