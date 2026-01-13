@@ -17,3 +17,31 @@ A framework to support you in performing experiments with the elastic-ai.Hardwar
 - [ ] Communication via TCP/Lightweight IP
 - [ ] Parse headers with c structs to automatically generate corresponding python types and methods to construct them from received data
 - [ ] Parse headers with c functions to automatically generate corresponding python stubs for remote procedure calls to the eai.Hardware
+
+## Quick Start
+
+1. Checkout the [elastic ai runtime](https://github.com/es-ude/elastic-ai.runtime.enV5/)
+   ```bash
+    $ git clone git@github.com:es-ude/elastic-ai.runtime.enV5.git
+    $ cd elastic-ai.runtime.env5
+   ```
+2. build the firmware either directly (make sure to have gcc-arm-noneabi available)
+   ```bash
+    $ cmake --preset env5_rev2_release
+    $ cmake --build --preset env5_rev2_release
+   ```
+   alternatively with devenv
+  ```bash
+   $ devenv tasks run -m before build
+  ```
+3. set the hardware to bootloader mode, e.g., by cycling power, while holding the boot button
+4. copy the firmware to the device, e.g.,
+  ```bash
+  $ cp build/env5_rev2_release/test\
+    /hardware/TestUsbProtocol/HardwareTestUsbProtocol.uf2\
+    /var/Volume/RP2
+  ```
+5. run the remote control
+  ```bash
+  uv run python -m elasticai.tester.remote_control -h
+  ```
