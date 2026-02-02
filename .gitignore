@@ -1,9 +1,9 @@
 # Devenv
 .devenv*
-!.devenv.flake.nix
 devenv.local.nix
 devenv.local.yaml
 
+.envrc
 # direnv
 .direnv
 

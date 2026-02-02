@@ -17,8 +17,29 @@ A framework to support you in performing experiments with the elastic-ai.Hardwar
 - [ ] Communication via TCP/Lightweight IP
 - [ ] Parse headers with c structs to automatically generate corresponding python types and methods to construct them from received data
 - [ ] Parse headers with c functions to automatically generate corresponding python stubs for remote procedure calls to the eai.Hardware
+- [x] Semi-automatic synthesis  (info via `eaixp synth --help`) with
+  - [x] Vivado local
+  - [x] Vivado remote
 
 ## Quick Start
+
+```bash
+$ uvx --from "git+https://github.com/es-ude/elastic-ai.experiment-framework.git" eaixp --help
+```
+or 
+```bash
+$ uv tool install "git+https://github.com/es-ude/elastic-ai.experiment-framework.git"
+$ eaixp --help
+```
+or
+```bash
+$ pip install "git+https://github.com/es-ude/elastic-ai.experiment-framework.git"
+$ eaixp --help
+```
+
+
+
+### Communicating with the elastic node via elasticai runtime
 
 1. Checkout the [elastic ai runtime](https://github.com/es-ude/elastic-ai.runtime.enV5/)
    ```bash
