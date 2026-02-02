@@ -87,7 +87,7 @@ class RemoteControlProtocol:
         self._msg_builder.data = data
         self._send()
 
-    def read_from_flash(self, sector: int, result_size: int) -> bytes:
+    def read_from_flash(self, sector: int, result_size: int) -> bytes | bytearray:
         self._msg_builder.command = Command.READ_FROM_FLASH
         self._msg_builder.flash_address = sector * self._msg_builder.flash_chunk_size
         self._msg_builder.num_read_bytes = result_size

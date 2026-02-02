@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from typing import Iterable
 
 from elasticai.experiment_framework.commands import Command
@@ -34,7 +35,7 @@ class MessageBuilder:
     def payload(self, v: bytes) -> None:
         self.data = v
 
-    def build(self) -> Iterable[Message]:
+    def build(self) -> Iterator[Message]:
         match self.command:
             case (
                 Command.NAK
@@ -55,7 +56,7 @@ class MessageBuilder:
                 yield self._deploy_model()
             case _:
                 if self.expected_response_size == 0 and len(self.data) == 0:
-                    yield from self._command_without_payload()
+                    yield self._command_without_payload()
                 elif self.expected_response_size == 0:
                     yield from self._simple_message_with_payload()
                 else:
@@ -85,7 +86,7 @@ class MessageBuilder:
 
     @property
     def _num_read_bytes_in_bytes(self) -> bytes:
-        return self._get_number_in_bytes(len(self.num_read_bytes))
+        return self._get_number_in_bytes(self.num_read_bytes)
 
     def _generate_message_chunks(self):
         for chunk in _batched_bytes(self.data, self.flash_chunk_size):
@@ -120,7 +121,7 @@ class MessageBuilder:
         )
         yield from self._generate_message_chunks()
 
-    def _read_from_flash(self) -> Message:
+    def _read_from_flash(self) -> Iterable[Message]:
         yield self._new_msg(
             b"".join((self._address_in_bytes, self._num_read_bytes_in_bytes)),
         )
