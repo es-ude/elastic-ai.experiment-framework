@@ -5,7 +5,17 @@ description = ""
 readme = "README.md"
 authors = [{ name = "Lukas Einhaus", email = "lukas.einhaus@uni-due.de" }]
 requires-python = ">=3.12"
-dependencies = ["click>=8.3.1", "pyserial>=3.5"]
+dependencies = [
+    "click>=8.3.1",
+    "fabric>=3.2.2",
+    "invoke>=2.2.1",
+    "pyserial>=3.5",
+]
+
+
+[project.scripts]
+eaixp = "elasticai.experiment_framework.cli:cli"
+
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"

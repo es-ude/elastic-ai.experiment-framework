@@ -40,3 +40,11 @@ depends_on = ["elasticai.experiment_framework.message_io", "elasticai.experiment
 [[modules ]]
 path = "elasticai.experiment_framework.commands"
 depends_on = []
+
+[[modules ]]
+path = "elasticai.experiment_framework.synthesis"
+depends_on = []
+
+[[modules ]]
+path = "elasticai.experiment_framework.cli"
+depends_on = ["elasticai.experiment_framework.synthesis"]
