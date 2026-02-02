@@ -10,10 +10,14 @@
     pkgs.ruff
     pkgs.cocogitto
     pkgs.git-cliff
-
+    pkgs.cmake
+    pkgs.gcc-arm-embedded-13
+    pkgs.ninja
+    pkgs.picotool
   ];
 
-  
+  languages.c.enable = true;
+  languages.cplusplus.enable = true;
   languages.python = {
     enable = true;
     package = pkgs.python312;

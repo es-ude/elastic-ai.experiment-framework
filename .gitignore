@@ -15,7 +15,11 @@ external/
 .mypy_cache/
 .ropeproject
 .pytest_cache/
+.tach/
 .venv
+.vscode
+build/
+**/.vscode
 
 **/__pycache__/
 .coverage

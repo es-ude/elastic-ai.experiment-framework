@@ -1,0 +1,100 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "host",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "build/${presetName}",
+      "cacheVariables": {
+        "ELASTIC_AI_TARGET": "HOST"
+      }
+    },
+    {
+      "name": "unit_test",
+      "displayName": "Unit-Test",
+      "inherits": "host",
+      "cacheVariables": {
+        "DEBUG_MODE": "ON"
+      }
+    },
+    {
+      "name": "env5_rev2",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "build/${presetName}",
+      "cacheVariables": {
+        "ELASTIC_AI_TARGET": "ENV5_2"
+      }
+    },
+    {
+      "name": "env5_rev2_release",
+      "displayName": "EnV5 Rev2 RELEASE",
+      "inherits": "env5_rev2",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "DEBUG_MODE": "OFF"
+      }
+    },
+    {
+      "name": "env5_rev2_debug",
+      "displayName": "EnV5 Rev2 Debug",
+      "inherits": "env5_rev2",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "DEBUG_MODE": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "host",
+      "hidden": true,
+      "configurePreset": "host",
+      "jobs": 4
+    },
+    {
+      "name": "unit_test",
+      "inherits": "host",
+      "configurePreset": "unit_test",
+      "targets": "all_unit_tests"
+    },
+    {
+      "name": "env5_rev2",
+      "hidden": true,
+      "configurePreset": "env5_rev2",
+      "jobs": 4
+    },
+    {
+      "name": "env5_rev2_release",
+      "inherits": "env5_rev2",
+      "configurePreset": "env5_rev2_release"
+    },
+    {
+      "name": "env5_rev2_debug",
+      "inherits": "env5_rev2",
+      "configurePreset": "env5_rev2_debug"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "unit_test",
+      "displayName": "Unit Tests",
+      "configurePreset": "unit_test",
+      "output": {
+        "outputJUnitFile": "unit-test.junit",
+        "outputOnFailure": true
+      },
+      "filter": {
+        "include": {
+          "label": "unit"
+        }
+      }
+    }
+  ]
+}
