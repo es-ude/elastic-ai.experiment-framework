@@ -47,4 +47,4 @@ depends_on = []
 
 [[modules ]]
 path = "elasticai.experiment_framework.cli"
-depends_on = ["elasticai.experiment_framework.synthesis"]
+depends_on = ["elasticai.experiment_framework.synthesis", "elasticai.experiment_framework.remote_control"]

@@ -1,12 +1,12 @@
 import logging
 import sys
-from argparse import ArgumentParser
 from pathlib import Path
 
 from serial import Serial
 
 from elasticai.experiment_framework.io_stream import IOStream
 from elasticai.experiment_framework.remote_control_protocol import RemoteControlProtocol
+import click
 
 
 class RemoteControl:
@@ -57,147 +57,89 @@ class RemoteControl:
         )
 
 
-def setup_arg_parser(parser: ArgumentParser):
-    def upload(subparsers):
-        p = subparsers.add_parser("upload")
-        p.add_argument(
-            "-a", "--address", type=int, help="Destination address in flash", default=0
-        )
-        p.add_argument("binfile", type=Path, help="Binary file")
-
-        def fn(rc: RemoteControl, args) -> None:
-            rc.upload_bitstream(args.address, args.binfile)
-
-        p.set_defaults(func=fn)
-
-    def read_skeleton_id(subparsers):
-        p = subparsers.add_parser("get_id")
-
-        def fn(rc: RemoteControl, _) -> None:
-            print(rc.read_skeleton_id())
-
-        p.set_defaults(func=fn)
-
-    def predict(subparsers):
-        p = subparsers.add_parser("predict")
-        p.add_argument("-rs", "--result_size", type=int)
-        p.add_argument("data", type=str)
-
-        def read_from_stdin() -> bytes:
-            return sys.stdin.buffer.read()
-
-        def read_from_cmd_line(args) -> None:
-            return bytes.fromhex(args.data)
-
-        def fn(rc: RemoteControl, args):
-            if args.data == "--":
-                data = read_from_stdin()
-            else:
-                data = read_from_cmd_line(args)
-
-            result = rc.predict(data, args.result_size)
-            print(result)
-
-        p.set_defaults(func=fn)
-
-    def deploy(subparsers):
-        p = subparsers.add_parser("deploy")
-        p.add_argument("address", type=int)
-        p.add_argument("path_to_bitstream_dir")
-
-        def fn(rc: RemoteControl, args) -> None:
-            rc.deploy_model(args.address, args.path_to_bitstream_dir)
-
-        p.set_defaults(func=fn)
-
-    def mcu_leds(subparsers):
-        p = subparsers.add_parser("mcu_leds")
-        p.add_argument("leds", type=str)
-
-        def fn(rc: RemoteControl, args) -> None:
-            rc.mcu_leds([led == "1" for led in args.leds])
-
-        p.set_defaults(func=fn)
-
-    def fpga_leds(subparsers):
-        p = subparsers.add_parser("fpga_leds")
-        p.add_argument("leds", type=str)
-
-        def fn(rc: RemoteControl, args) -> None:
-            rc.fpga_leds([led == "1" for led in args.leds])
-
-        p.set_defaults(func=fn)
-
-    def fpga_on(subparsers):
-        p = subparsers.add_parser("fpga_on")
-
-        def fn(rc: RemoteControl, _):
-            rc.fpga_power_on()
-
-        p.set_defaults(func=fn)
-
-    def fpga_off(subparsers):
-        p = subparsers.add_parser("fpga_off")
-
-        def fn(rc: RemoteControl, _):
-            rc.fpga_power_off()
-            print("powering off")
-
-        p.set_defaults(func=fn)
-
-    def command(subparsers):
-        p = subparsers.add_parser("command")
-        p.add_argument("-rs", "--result_size", type=int)
-        p.add_argument("-id", "--command_id", type=int)
-        p.add_argument("data", type=str)
-
-        def read_from_stdin() -> bytes:
-            return sys.stdin.buffer.read()
-
-        def read_from_cmd_line(args) -> None:
-            return args.data
-
-        def fn(rc: RemoteControl, args):
-            if args.data == "--":
-                data = read_from_stdin()
-            else:
-                data = read_from_cmd_line(args)
-
-            result = rc.send_command(args.command_id, data, args.result_size)
-            print(result)
-
-        p.set_defaults(func=fn)
-
-    actions = (
-        deploy,
-        predict,
-        mcu_leds,
-        upload,
-        read_skeleton_id,
-        fpga_on,
-        fpga_off,
-        fpga_leds,
-        command,
-    )
-
-    arg_parser.add_argument("-p", "--port", type=str, help="serial port", required=True)
-    arg_parser.add_argument("-v", "--verbose", help="debug msgs", action="store_true")
-    subparsers = arg_parser.add_subparsers(required=True, help="available actions")
-    for submenu in actions:
-        submenu(subparsers)
-
-
-if __name__ == "__main__":
-    arg_parser = ArgumentParser()
-    setup_arg_parser(arg_parser)
-    args = arg_parser.parse_args()
-    if args.verbose:
+@click.group()
+@click.option("-p", "--port", type=str, help="serial port")
+@click.option("-v", "--verbose", is_flag=True)
+@click.pass_context
+def main(ctx, port, verbose):
+    """Interact with an MCU and the FPGA connected to it."""
+    if verbose:
         logging.basicConfig(
             level=logging.DEBUG,
             force=True,
             format="{levelname}:: {pathname}:{lineno}\n\t{message}",
             style="{",
         )
-    with Serial(args.port, timeout=5) as device:
-        rc = RemoteControl(device)
-        args.func(rc, args)
+    ctx.obj = ctx.with_resource(Serial(port))
+
+
+@main.command
+@click.option(
+    "-fa", "--flash-address", type=int, help="destination address in flash", default=0
+)
+@click.argument("binfile")
+@click.pass_obj
+def upload(obj, flash_address, binfile):
+    """Upload a binfile to the specified flash sector address"""
+    rc = RemoteControl(obj)
+    rc.upload_bitstream(flash_address, binfile)
+
+
+@main.command
+@click.pass_obj
+def get_id(obj):
+    rc = RemoteControl(obj)
+    rc.read_skeleton_id()
+
+
+@main.command
+@click.pass_obj
+@click.option("-rs", "--result-size", type=int)
+@click.argument("data")
+def predict(obj, result_size, data):
+    if data == "--":
+        data = sys.stdin.buffer.read()
+    else:
+        data = bytes.fromhex(data)
+    rc = RemoteControl(obj)
+    result = rc.predict(data, result_size)
+    print(result)
+
+
+@main.command
+@click.pass_obj
+@click.option("-fa", "--flash-address")
+def load_bitstream(obj, address):
+    """Load the bitstream/design/configuration from the specified flash address to the fpga."""
+    rc = RemoteControl(obj)
+    rc.deploy_model(address, "")
+
+
+@main.command
+@click.pass_obj
+@click.argument("led_state", type=str)
+def mcu_leds(obj, led_state):
+    """Specify the led state as a three digit bit vector."""
+    rc = RemoteControl(obj)
+    rc.mcu_leds(tuple(led == "1" for led in led_state))
+
+
+@main.group
+def fpga():
+    pass
+
+
+@fpga.command("on")
+@click.pass_obj
+def fpga_on(obj):
+    """Turn fpga on."""
+    rc = RemoteControl(obj)
+    rc.fpga_power_on()
+
+
+@fpga.command("off")
+@click.pass_obj
+def fpga_off(obj):
+    """Turn fpga off."""
+    rc = RemoteControl(obj)
+    rc.fpga_power_off()
