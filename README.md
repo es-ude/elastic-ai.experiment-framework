@@ -66,3 +66,27 @@ $ eaixp --help
   ```bash
   uv run python -m elasticai.tester.remote_control -h
   ```
+
+
+## Extend the remote control CLI
+
+The remote control lives in `elasticai.experiment_framework.remote_control`.
+The CLI can be easily extended as follows:
+
+```python
+import elasticai.experiment_framework.remote_control as rc
+import click
+
+@rc.main.command
+@click.pass_obj
+@click.argument("data", type=str)
+def my_custom_command(obj):
+  rc_handle = rc.RemoteControl(obj)
+  my_cmd_id = 250
+  result = rc_handle.send_command(my_cmd_id, data, len(data))
+  print(result)
+```
+
+If you need more control, you can use the
+`elasticai.experiment_framework.remote_control_protocol`
+directly in your command.
