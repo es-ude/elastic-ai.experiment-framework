@@ -7,10 +7,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from tarfile import open as tar_open
 from string import Template
-from invoke.exceptions import UnexpectedExit
 from invoke import Context as _invContext
 import shutil
 import os
+import shlex
 
 
 class TargetPlatforms(StrEnum):
@@ -91,18 +91,9 @@ def _write_tcl_script(
     )
 
 
-def remote_path_exists(connection, remote_path) -> bool:
-    # There has to be a better way than this
-    try:
-        connection.run(f"ls {remote_path}")
-        return True
-    except UnexpectedExit:
-        return False
-
-
-def try_remove_recursively(connection, remote_path) -> None:
-    if remote_path_exists(connection, remote_path):
-        connection.run(f"rm -rf {remote_path}")
+def try_remove_recursively(connection, remote_path):
+    quoted_rm = shlex.quote(f"rm -rf {remote_path}")
+    connection.run(f"sh -c {quoted_rm}")
 
 
 class Verbosity(Enum):
@@ -266,7 +257,7 @@ def main(
         connection.run(f"mkdir -p {remote_working_dir}/{_SRCS_FILE_BASE_NAME}")
         connection.put(
             srcs_archive,
-            dst=f"{remote_working_dir}/{_SRCS_FILE_NAME}".removeprefix("~/"),
+            f"{remote_working_dir}/{_SRCS_FILE_NAME}".removeprefix("~/"),
         )
     with connection.cd(remote_working_dir):
         print("unpacking srcs on server")
@@ -294,8 +285,8 @@ def main(
         ]:
             connection.run(cmd)
     connection.get(
-        dst=str(src_dir.parent.absolute() / "vivado_run_results.tar.gz"),
-        src=f"{remote_working_dir}/results.tar.gz",
+        f"{remote_working_dir}/results.tar.gz",
+        str(src_dir.parent.absolute() / "vivado_run_results.tar.gz"),
     )
 
 
