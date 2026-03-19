@@ -1,3 +1,4 @@
+from contextlib import AbstractContextManager
 from typing import Protocol
 from fabric import Connection as _fabConnection
 import click
@@ -99,7 +100,7 @@ def remote_path_exists(connection, remote_path) -> bool:
         return False
 
 
-def try_remove_recursively(connection, remote_path):
+def try_remove_recursively(connection, remote_path) -> None:
     if remote_path_exists(connection, remote_path):
         connection.run(f"rm -rf {remote_path}")
 
@@ -149,8 +150,8 @@ class ConnectionWrapperForInvoke:
             case _:
                 return self._wrapped.run(cmd)
 
-    def cd(self, dir: str | Path):
-        self._wrapped.cd(dir)
+    def cd(self, dir: str | Path) -> AbstractContextManager:
+        return self._wrapped.cd(dir)
 
     def get(self, src: str, dst: str | Path):
         shutil.copy(src, dst)

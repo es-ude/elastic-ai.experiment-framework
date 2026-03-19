@@ -1,3 +1,4 @@
+from typing import Literal
 from elasticai.experiment_framework.commands import Command
 
 
@@ -8,7 +9,12 @@ class Message:
     PAYLOAD_OFFSET: int = NUM_BYTES_COMMAND + NUM_BYTES_PAYLOAD_SIZE
     MINIMUM_SIZE: int = NUM_BYTES_PAYLOAD_SIZE + NUM_BYTES_CHECKSUM + NUM_BYTES_COMMAND
 
-    def __init__(self, command: Command, data: bytes, byte_order: str = "big") -> None:
+    def __init__(
+        self,
+        command: Command | int,
+        data: bytes,
+        byte_order: Literal["little", "big"] = "big",
+    ) -> None:
         self.command = command
         self.payload = data
         self.byte_order = byte_order

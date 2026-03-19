@@ -1,3 +1,4 @@
+from typing import Literal
 import logging
 
 from elasticai.experiment_framework.commands import Command
@@ -9,7 +10,7 @@ class MessageIO:
     def __init__(
         self,
         io_stream: IOStream,
-        byte_order: str,
+        byte_order: Literal["big"] | Literal["little"],
         ack: Message,
         nak: Message,
         max_trials: int = 5,
@@ -23,7 +24,7 @@ class MessageIO:
         self._max_trials = max_trials
         self._logger = logging.getLogger(__name__)
 
-    def _receive_new_msg(self) -> Message:
+    def _fetch_new_message(self) -> None:
         raw_command = self._do_read(Message.NUM_BYTES_COMMAND)
         raw_length = self._do_read(Message.NUM_BYTES_PAYLOAD_SIZE)
         length = int.from_bytes(raw_length, self._byte_order)
@@ -41,17 +42,17 @@ class MessageIO:
     def _checksum_was_valid(self) -> bool:
         return self._last_checksum == self._last_msg.checksum
 
-    def _send_ack(self):
+    def _send_ack(self) -> None:
         self._do_write(self._ACK.to_bytes())
 
-    def _send_nak(self):
+    def _send_nak(self) -> None:
         self._do_write(self._NAK.to_bytes())
 
-    def _acknowledge_required(self):
+    def _acknowledge_required(self) -> bool:
         return self._last_msg.command not in (Command.NAK, Command.ACK)
 
     def read(self) -> Message:
-        self._receive_new_msg()
+        self._fetch_new_message()
         if self._acknowledge_required():
             if self._checksum_was_valid():
                 self._send_ack()
@@ -70,7 +71,7 @@ class MessageIO:
         self._logger.debug(f"reading {num_bytes} bytes", stacklevel=2)
         data = self._stream.read(num_bytes)
         self._logger.debug(f"read data {data}", stacklevel=2)
-        return data
+        return bytes(data)
 
     def write(self, msg: Message) -> None:
         self._logger.debug(f"sending {msg}", stacklevel=3)

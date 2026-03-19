@@ -1,3 +1,4 @@
+from typing import Self
 from elasticai.experiment_framework.commands import Command
 from elasticai.experiment_framework.io_stream import IOStream
 from elasticai.experiment_framework.message_builder import MessageBuilder
@@ -29,12 +30,12 @@ class RemoteControlProtocol:
         response = self._device.read()
         self._msg_builder.flash_chunk_size = response.payload_as_uint
 
-    def fpga_power_on(self):
+    def fpga_power_on(self) -> None:
         self._msg_builder.command = Command.FPGA_POWER
         self._msg_builder.data = b"\xff"
         self._send()
 
-    def fpga_power_off(self):
+    def fpga_power_off(self) -> None:
         self._msg_builder.command = Command.FPGA_POWER
         self._msg_builder.data = b"\x00"
         self._send()
@@ -57,7 +58,7 @@ class RemoteControlProtocol:
         if response_size > 0:
             msg = self._device.read()
             return msg.payload
-        return None
+        return bytes()
 
     def read_skeleton_id(self) -> bytes:
         self._msg_builder.command = Command.READ_SKELETON_ID
@@ -106,9 +107,9 @@ class RemoteControlProtocol:
             led_byte = (led_byte << 1) | led
         return led_byte.to_bytes(length=1, byteorder="big", signed=False)
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         self.request_flash_chunk_size()
         return self
 
-    def __exit__(self):
+    def __exit__(self) -> None:
         pass
