@@ -24,6 +24,19 @@ build-backend = "hatchling.build"
 packages = ["src/elasticai"]
 exclude = ["*_test.py", "test_*.py"]
 
+[tool.pyrefly]
+search-path = ["src"]
+project-includes = ["src/**/*.py*", "tests/**/*.py*"]
+project-excludes = [
+    "**/__pycache__",
+    "**/.devenv",
+    "**/.direnv",
+    "**/.mypy_cache",
+    "**/.pytest_cache",
+    "**/build",
+    "**/*.pyc",
+    "example-firmwares/build/**",
+]
 
 [tool.hatch.version]
 source = "vcs"
@@ -40,6 +53,10 @@ dev = [
     "pytest-cov>=7.0.0",
     "python-lsp-server>=1.14.0",
     "tach>=0.33.0",
+]
+extra-dev = [
+    "pyrefly>=0.57.1",
+    "ty>=0.0.24",
 ]
 
 

@@ -1,3 +1,4 @@
+from typing import Self
 import pytest
 
 from elasticai.experiment_framework.commands import Command
@@ -18,13 +19,13 @@ class DummyIO(IOStream):
         self.current_read_pos = 0
         self.rx = bytearray()
 
-    def read(self, num_bytes: int) -> bytes:
+    def read(self, num_bytes: int) -> bytes | bytearray:
         old_pos = self.current_read_pos
         self.current_read_pos += num_bytes
         v = self.tx[old_pos : self.current_read_pos]
         return v
 
-    def write(self, data: bytes):
+    def write(self: Self, data: bytes | bytearray) -> None:
         self.rx.extend(data)
 
 

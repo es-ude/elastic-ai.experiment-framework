@@ -1,19 +1,19 @@
 from collections.abc import Iterator
-from typing import Iterable
+from typing import Iterable, Literal
 
 from elasticai.experiment_framework.commands import Command
 from elasticai.experiment_framework.message import Message
 
 
-def _batched_bytes(iterable: bytes | bytearray, batch_size: int):
+def _batched_bytes(iterable: bytes | bytearray, batch_size: int) -> Iterator[bytes]:
     b = bytearray()
     for i in iterable:
         b.append(i)
         if len(b) == batch_size:
-            yield b
+            yield bytes(b)
             b.clear()
     if len(b) > 0:
-        yield b
+        yield bytes(b)
 
 
 class MessageBuilder:
@@ -22,9 +22,9 @@ class MessageBuilder:
         self.flash_address = 0
         self.data = bytes()
         self.num_read_bytes = 1
-        self.byte_order = "big"
+        self.byte_order: Literal["big", "little"] = "big"
         self._NUM_BYTES_FOR_LENGTH = 4
-        self.command = Command.NAK
+        self.command: int | Command = Command.NAK
         self.expected_response_size = 1
 
     @property
@@ -47,7 +47,7 @@ class MessageBuilder:
             case Command.WRITE_TO_FLASH:
                 yield from self._write_to_flash()
             case Command.READ_FROM_FLASH:
-                yield self._read_from_flash()
+                yield from self._read_from_flash()
             case Command.FPGA_LEDS | Command.MCU_LEDS | Command.FPGA_POWER:
                 yield self._simple_message_with_payload()
             case Command.INFERENCE:
@@ -58,7 +58,7 @@ class MessageBuilder:
                 if self.expected_response_size == 0 and len(self.data) == 0:
                     yield self._command_without_payload()
                 elif self.expected_response_size == 0:
-                    yield from self._simple_message_with_payload()
+                    yield self._simple_message_with_payload()
                 else:
                     yield from self._command_with_payload_and_response()
 
@@ -73,7 +73,7 @@ class MessageBuilder:
     def _command_without_payload(self) -> Message:
         return Message(self.command, bytes())
 
-    def _simple_message_with_payload(self):
+    def _simple_message_with_payload(self) -> Message:
         return self._new_msg(self.data)
 
     @property
@@ -88,7 +88,7 @@ class MessageBuilder:
     def _num_read_bytes_in_bytes(self) -> bytes:
         return self._get_number_in_bytes(self.num_read_bytes)
 
-    def _generate_message_chunks(self):
+    def _generate_message_chunks(self) -> Iterator[Message]:
         for chunk in _batched_bytes(self.data, self.flash_chunk_size):
             yield self._new_msg(chunk)
 

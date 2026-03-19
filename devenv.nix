@@ -14,6 +14,8 @@
     pkgs.gcc-arm-embedded-13
     pkgs.ninja
     pkgs.picotool
+    pkgs.ty
+    pkgs.pyrefly
   ];
 
   languages.c.enable = true;
@@ -38,7 +40,9 @@
     };
 
     "check:types" = {
-      exec = "${uv_run} mypy -p elasticai.experiment_framework";
+      exec = ''
+        ${uv_run} pyrefly check 'src/**/*.py*' 'tests/**/*.py*'
+      '';
       before = ["check:code-lint"];
     };
 
@@ -57,7 +61,7 @@
       '';
     };
 
-   "check:formatting" = {
+    "check:formatting" = {
       exec = "${uv_run} ruff format --check";
       before = ["check:code-lint"];
     };
@@ -71,11 +75,10 @@
       exec = "${pkgs.uv}/bin/uv build";
     };
 
-     "check:code-lint" = {
+    "check:code-lint" = {
     };
 
     "check:tests" = {
     }; # this is triggered in CI with --mode before flag
   };
-
 }
