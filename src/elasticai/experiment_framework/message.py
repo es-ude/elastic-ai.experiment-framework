@@ -65,7 +65,7 @@ class Message:
             checksum ^= b
         return self._int_to_bytes(checksum, self.NUM_BYTES_CHECKSUM)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         command_name = (
             self.command.name
             if hasattr(self.command, "name")

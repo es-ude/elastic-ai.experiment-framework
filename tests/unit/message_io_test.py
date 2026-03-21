@@ -25,8 +25,9 @@ class DummyIO(IOStream):
         v = self.tx[old_pos : self.current_read_pos]
         return v
 
-    def write(self: Self, data: bytes | bytearray) -> None:
+    def write(self: Self, data: bytes | bytearray) -> int:
         self.rx.extend(data)
+        return len(data)
 
 
 @pytest.fixture
