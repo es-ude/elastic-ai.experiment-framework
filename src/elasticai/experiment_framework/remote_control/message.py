@@ -1,5 +1,5 @@
 from typing import Literal
-from elasticai.experiment_framework.commands import Command
+from .commands import Command
 
 
 class Message:

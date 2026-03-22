@@ -4,8 +4,9 @@ from pathlib import Path
 
 from serial import Serial
 
-from elasticai.experiment_framework.io_stream import IOStream
-from elasticai.experiment_framework.remote_control_protocol import RemoteControlProtocol
+from .io_stream import IOStream
+from .remote_control_protocol import RemoteControlProtocol
+from .devices import probe_for_devices
 import click
 
 
@@ -58,7 +59,13 @@ class RemoteControl:
 
 
 @click.group()
-@click.option("-p", "--port", type=str, help="serial port")
+@click.option(
+    "-p",
+    "--port",
+    type=str,
+    help="serial port, the default is auto, which will probe for supported devices and pick the first available one",
+    default="auto",
+)
 @click.option("-v", "--verbose", is_flag=True)
 @click.pass_context
 def main(ctx, port, verbose):
@@ -70,7 +77,14 @@ def main(ctx, port, verbose):
             format="{levelname}:: {pathname}:{lineno}\n\t{message}",
             style="{",
         )
-    ctx.obj = ctx.with_resource(Serial(port))
+    if port == "auto":
+        devices = probe_for_devices()
+        if len(devices) == 0:
+            raise RuntimeError("failed to autodetect devices, specify port manually.")
+        device = devices[0]
+        ctx.obj = ctx.with_resource(device.connect())
+    else:
+        ctx.obj = ctx.with_resource(Serial(port))
 
 
 @main.command

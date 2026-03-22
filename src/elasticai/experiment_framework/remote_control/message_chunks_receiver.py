@@ -1,7 +1,7 @@
 import logging
 
-from elasticai.experiment_framework.commands import Command
-from elasticai.experiment_framework.message_io import MessageIO
+from .commands import Command
+from .message_io import MessageIO
 
 
 class MessageChunksReceiver:
