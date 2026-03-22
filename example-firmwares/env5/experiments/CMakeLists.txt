@@ -4,6 +4,7 @@ add_executable(env5_experiment_firmware
 )
 
 add_subdirectory(libs)
+add_subdirectory(tests)
 
 target_link_libraries(env5_experiment_firmware
         env5_fpga

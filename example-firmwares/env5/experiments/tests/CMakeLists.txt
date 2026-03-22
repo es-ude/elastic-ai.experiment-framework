@@ -1,0 +1,1 @@
+add_unity_test(LIB_UNDER_TEST remote_control_protocol)
