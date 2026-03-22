@@ -63,7 +63,7 @@ omit = [
     "src/elasticai/experiment_framework/*_test.py", # not testable
 ]
 source = ["src/elasticai/experiment_framework"]
-command_line = "-m pytest"
+command_line = "-m pytest tests/unit"
 
 [tool.pytest]
 testpaths = ["tests/unit"]
