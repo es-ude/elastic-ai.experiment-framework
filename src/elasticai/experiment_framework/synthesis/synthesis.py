@@ -1,3 +1,4 @@
+from typing import overload
 import tarfile
 from .verbosity import Verbosity
 from dataclasses import dataclass
@@ -127,7 +128,15 @@ def _run_synthesis(config: SynthesisConfig) -> Path:
     return target_file
 
 
-def run_synthesis(src_dir: Path, config: SynthesisConfig | None = None) -> Path:
+@overload
+def run_synthesis(src_dir: Path) -> Path: ...
+@overload
+def run_synthesis(*, config: SynthesisConfig) -> Path: ...
+
+
+def run_synthesis(
+    src_dir: Path | None = None, *, config: SynthesisConfig | None = None
+) -> Path:
     """Synthesize with vivado. Loads config from env if not present.
 
     Uploads the vhdl files in `src_dir` to a remote, runs
@@ -143,8 +152,12 @@ def run_synthesis(src_dir: Path, config: SynthesisConfig | None = None) -> Path:
     via `eaixp synth --help` for documentation of the other
     `config` parameters.
     """
-    if config is None:
-        config = _load_synthesis_config_from_env(src_dir)
+    if config is None and src_dir is not None:
+        config = load_synthesis_config_from_env(src_dir)
+    elif config is not None:
+        src_dir = config.src_dir
+    else:
+        raise ValueError("incorrect arguments provided for run_synthesis")
 
     _run_synthesis(config)
 
@@ -236,7 +249,7 @@ def main(
     )
 
 
-def _load_synthesis_config_from_env(src_dir: Path) -> SynthesisConfig:
+def load_synthesis_config_from_env(src_dir: Path) -> SynthesisConfig:
     return SynthesisConfig(
         src_dir=src_dir,
         host=os.environ.get("SYNTH_SERVER", os.environ.get("SYNTH_HOST", "")),

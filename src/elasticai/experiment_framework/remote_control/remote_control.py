@@ -52,9 +52,11 @@ class RemoteControl:
     def mcu_leds(self, leds: tuple[bool, bool, bool]):
         self._rcp.set_mcu_leds(leds)
 
-    def send_command(self, cmd_id: int, data: str, result_size: int):
+    def send_command(self, cmd_id: int, data: str | bytes, result_size: int):
         return self._rcp.send_custom_command(
-            cmd_id, payload=bytes.fromhex(data), response_size=result_size
+            cmd_id,
+            payload=bytes.fromhex(data) if isinstance(data, str) else data,
+            response_size=result_size,
         )
 
 
@@ -117,7 +119,7 @@ def predict(obj, result_size, data):
         data = bytes.fromhex(data)
     rc = RemoteControl(obj)
     result = rc.predict(data, result_size)
-    print(result)
+    print(result.hex(" "))
 
 
 @main.command

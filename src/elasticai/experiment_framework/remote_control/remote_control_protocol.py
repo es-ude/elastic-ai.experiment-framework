@@ -4,6 +4,9 @@ from .io_stream import IOStream
 from .message_builder import MessageBuilder
 from .message_chunks_receiver import MessageChunksReceiver
 from .message_io import MessageIO
+from logging import getLogger, INFO as LogDEBUG
+
+_logger = getLogger(__name__)
 
 
 class RemoteControlProtocol:
@@ -96,6 +99,7 @@ class RemoteControlProtocol:
 
     def _send(self) -> None:
         for i, msg in enumerate(self._msg_builder.build()):
+            _logger.log(LogDEBUG, f"sending chunk {i}")
             self._device.write(msg)
 
     def _build_led_byte(self, leds: tuple[bool, bool, bool]) -> bytes:
