@@ -42,6 +42,7 @@
     "check:types" = {
       exec = ''
         ${uv_run} pyrefly check 'src/**/*.py*' 'tests/**/*.py*'
+        ${uv_run} ty check
       '';
       before = ["check:code-lint"];
     };

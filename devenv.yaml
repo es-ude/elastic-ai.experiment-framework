@@ -3,7 +3,8 @@ inputs:
   nixpkgs:
     url: github:cachix/devenv-nixpkgs/rolling
   creator:
-    url: github:es-ude/elastic-ai.creator/lukeinh/mxpsvvlpvtrl
+    url: github:es-ude/elastic-ai.creator
+    flake: false
 
 # If you're using non-OSS software, you can set allowUnfree to true.
 # allowUnfree: true

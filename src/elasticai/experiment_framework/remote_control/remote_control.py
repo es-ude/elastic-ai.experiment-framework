@@ -33,7 +33,7 @@ class RemoteControl:
         )
         print(self._rcp.read_skeleton_id())
 
-    def upload_bitstream(self, flash_sector: int, path_to_bitstream: str):
+    def upload_bitstream(self, flash_sector: int, path_to_bitstream: str) -> None:
         directory = Path(path_to_bitstream)
         with open(directory, "r+b") as f:
             config = f.read()
@@ -113,7 +113,7 @@ def upload(obj, flash_address, binfile):
 @click.pass_obj
 def get_id(obj):
     rc = RemoteControl(obj)
-    rc.read_skeleton_id()
+    print(rc.read_skeleton_id())
 
 
 @main.command
