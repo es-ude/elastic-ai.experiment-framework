@@ -41,12 +41,7 @@ class RemoteControlProtocol:
         self._send()
 
     def predict(self, _input: bytes, output_length: int) -> bytes:
-        self._msg_builder.command = Command.INFERENCE
-        self._msg_builder.data = _input
-        self._msg_builder.expected_response_size = output_length
-        self._send()
-        msg = self._device.read()
-        return msg.payload
+        return self.send_custom_command(9, _input, output_length)
 
     def send_custom_command(
         self, cmd_id: int, payload: bytes, response_size: int = 0
@@ -55,10 +50,13 @@ class RemoteControlProtocol:
         self._msg_builder.data = payload
         self._msg_builder.expected_response_size = response_size
         self._send()
-        if response_size > 0:
+        response = bytearray()
+        while response_size > 0:
             msg = self._device.read()
-            return msg.payload
-        return bytes()
+            response.extend(msg.payload)
+            response_size -= msg.payload_size
+
+        return bytes(response)
 
     def read_skeleton_id(self) -> bytes:
         self._msg_builder.command = Command.READ_SKELETON_ID
