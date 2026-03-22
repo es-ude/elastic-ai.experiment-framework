@@ -47,10 +47,10 @@ class _SerialIOStream(IOStream):
     def __init__(self, _serial: _Serial):
         self._serial = _serial
 
-    def write(self, data: bytes | bytearray) -> int:
+    def write(self, data: bytes | bytearray, /) -> int:
         return cast(int, self._serial.write(data))
 
-    def read(self, num_bytes: int) -> bytes:
+    def read(self, num_bytes: int, /) -> bytes:
         return self._serial.read(num_bytes)
 
 

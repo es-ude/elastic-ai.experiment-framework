@@ -1,3 +1,5 @@
+import contextlib
+from collections.abc import Generator
 import logging
 import sys
 from pathlib import Path
@@ -6,8 +8,14 @@ from serial import Serial
 
 from .io_stream import IOStream
 from .remote_control_protocol import RemoteControlProtocol
-from .devices import probe_for_devices
+from .devices import Device, probe_for_devices
 import click
+
+
+@contextlib.contextmanager
+def connect_remote_control(device: Device) -> Generator["RemoteControl"]:
+    with device.connect() as connected:
+        yield RemoteControl(connected)
 
 
 class RemoteControl:
@@ -25,8 +33,8 @@ class RemoteControl:
         )
         print(self._rcp.read_skeleton_id())
 
-    def upload_bitstream(self, flash_sector: int, path_to_bitstream_dir: str):
-        directory = Path(path_to_bitstream_dir)
+    def upload_bitstream(self, flash_sector: int, path_to_bitstream: str):
+        directory = Path(path_to_bitstream)
         with open(directory, "r+b") as f:
             config = f.read()
         self._rcp.write_to_flash(sector=flash_sector, data=config)
