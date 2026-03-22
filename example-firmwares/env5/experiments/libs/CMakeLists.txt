@@ -32,3 +32,5 @@ target_link_libraries(experiment
         Pico::hardware_spi
         Pico::hardware_i2c
 )
+
+add_subdirectory(experiment/remote_control_protocol)
