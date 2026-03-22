@@ -80,11 +80,13 @@ class MessageIO:
         rec = self._NAK
         for t in range(self._max_trials):
             rec = self.read()
-            if rec == self._ACK:
+            if rec.command == self._ACK.command:
                 self._logger.debug(f"received valid ack on trial {t}")
                 break
             elif t < self._max_trials - 1:
-                self._logger.debug("retry sending", stacklevel=2)
+                self._logger.debug(
+                    f"got {rec.command} instead of ACK, retry sending", stacklevel=2
+                )
                 self._do_write(b)
         if rec == self._NAK:
             raise IOError(
