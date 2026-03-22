@@ -5,7 +5,7 @@ from typing import Protocol, cast
 from serial.tools import list_ports
 from dataclasses import dataclass
 from serial import Serial as _Serial
-from elasticai.experiment_framework.io_stream import IOStream
+from .io_stream import IOStream
 
 
 @dataclass(frozen=True)

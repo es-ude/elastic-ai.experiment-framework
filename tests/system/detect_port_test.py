@@ -1,8 +1,8 @@
-from elasticai.experiment_framework.devices import (
+from elasticai.experiment_framework.remote_control.devices import (
     detect_device,
     probe_for_devices,
 )
-from elasticai.experiment_framework.message import Message
+from elasticai.experiment_framework.remote_control.message import Message
 
 
 def test_detect_env5() -> None:

@@ -1,11 +1,11 @@
 from typing import Self
 import pytest
 
-from elasticai.experiment_framework.commands import Command
-from elasticai.experiment_framework.io_stream import IOStream
-from elasticai.experiment_framework.message import Message
-from elasticai.experiment_framework.message_builder import MessageBuilder
-from elasticai.experiment_framework.message_io import MessageIO
+from elasticai.experiment_framework.remote_control.commands import Command
+from elasticai.experiment_framework.remote_control.io_stream import IOStream
+from elasticai.experiment_framework.remote_control.message import Message
+from elasticai.experiment_framework.remote_control.message_builder import MessageBuilder
+from elasticai.experiment_framework.remote_control.message_io import MessageIO
 
 
 @pytest.fixture

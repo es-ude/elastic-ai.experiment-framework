@@ -1,9 +1,9 @@
 from typing import Self
-from elasticai.experiment_framework.commands import Command
-from elasticai.experiment_framework.io_stream import IOStream
-from elasticai.experiment_framework.message_builder import MessageBuilder
-from elasticai.experiment_framework.message_chunks_receiver import MessageChunksReceiver
-from elasticai.experiment_framework.message_io import MessageIO
+from .commands import Command
+from .io_stream import IOStream
+from .message_builder import MessageBuilder
+from .message_chunks_receiver import MessageChunksReceiver
+from .message_io import MessageIO
 
 
 class RemoteControlProtocol:

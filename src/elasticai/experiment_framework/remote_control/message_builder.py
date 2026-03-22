@@ -1,8 +1,8 @@
 from collections.abc import Iterator
 from typing import Iterable, Literal
 
-from elasticai.experiment_framework.commands import Command
-from elasticai.experiment_framework.message import Message
+from .commands import Command
+from .message import Message
 
 
 def _batched_bytes(iterable: bytes | bytearray, batch_size: int) -> Iterator[bytes]:

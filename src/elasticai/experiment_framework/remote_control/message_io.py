@@ -1,9 +1,9 @@
 from typing import Literal
 import logging
 
-from elasticai.experiment_framework.commands import Command
-from elasticai.experiment_framework.io_stream import IOStream
-from elasticai.experiment_framework.message import Message
+from .commands import Command
+from .io_stream import IOStream
+from .message import Message
 
 
 class MessageIO:
