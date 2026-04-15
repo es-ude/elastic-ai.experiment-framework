@@ -23,3 +23,5 @@ build/
 
 **/__pycache__/
 .coverage
+
+.idea/
