@@ -1,8 +1,4 @@
-Here's the complete, final protocol specification incorporating all refinements for unlimited data transfers and streaming:
-
----
-
-### **Final Protocol Specification v4.0**
+# **RCP Specification**
 **Transport**: USB UART (8N1)
 **Endianness**: Little-endian
 **Max Chunk Size**: Configurable (32-65535 bytes, default 256)
@@ -10,28 +6,7 @@ Here's the complete, final protocol specification incorporating all refinements 
 
 ---
 
-### **Message Type IDs**
-| Category          | Message Type               | ID (Hex) | ID (Dec) | Notes                          |
-|-------------------|----------------------------|----------|----------|--------------------------------|
-| **Core Calls**    | IMMEDIATE_CALL             | 0x01     | 1        |                                |
-|                   | QUEUE_CALL                 | 0x02     | 2        |                                |
-|                   | LOOP_START                 | 0x03     | 3        |                                |
-|                   | LOOP_STOP                  | 0x04     | 4        |                                |
-|                   | RUN_QUEUE                  | 0x05     | 5        |                                |
-|                   | QUEUE_START                | 0x06     | 6        |                                |
-|                   | QUEUE_END                  | 0x07     | 7        |                                |
-| **Data Transfer** | DATA_START                 | 0x0E     | 14       | Initiate data transfer         |
-|                   | DATA_CHUNK                 | 0x0F     | 15       | Data chunk                    |
-|                   | DATA_END                   | 0x10     | 16       | Complete data transfer        |
-| **Streaming**     | STREAM_OPEN                | 0x11     | 17       | Open stream channel           |
-|                   | STREAM_CLOSE               | 0x12     | 18       | Close stream channel          |
-| **System**        | ACK                        | 0x0A     | 10       |                                |
-|                   | NAK                        | 0x0B     | 11       |                                |
-|                   | HANDSHAKE                  | 0x0C     | 12       |                                |
-
----
-
-### **Base Message Header (5-7 bytes)**
+### **Message Header (6 bytes)**
 | Field       | Size (bytes) | Description                                  |
 |-------------|--------------|----------------------------------------------|
 | sync        | 1            | Sync byte (0xAA)                             |
@@ -39,123 +14,155 @@ Here's the complete, final protocol specification incorporating all refinements 
 | flags       | 1            | Bitfield (see below)                         |
 | msg_id      | 1            | Message ID (0-255)                           |
 | payload_len | 2            | Payload length (little-endian)               |
-| crc8        | 1*           | CRC-8 checksum (if enabled)                  |
 
-*Flags Bitfield*:
+---
+
+### **Message Types**
+| ID (Hex) | Message Type   |
+|----------|----------------|
+| 0x01     | IMMEDIATE_CALL |
+| 0x02     | RETURN         |
+| 0x03     | DATA_CHUNK     |
+| 0x04     | OPEN_STREAM    |
+| 0x05     | CLOSE_STREAM   |
+| 0x06     | ACK            |
+| 0x07     | NAK            |
+| 0x08     | HANDSHAKE      |
+
+---
+
+### **Flags Bitfield**
+| Bit Index | Field    |
+|-----------|----------|
+| 0         | NEED_ACK |
+| 1         | HAS_CRC  |
+| 2         | reserved |
+| 3         | reserved |
+| 4         | reserved |
+| 5         | reserved |
+| 6         | reserved |
+| 7         | reserved |
+
+---
+
+# **Message Specification**
+
+### **IMMEDIATE_CALL:**
 ```
-Bit 0: NEED_ACK (1 = require ACK/NAK)
-Bit 1: HAS_CRC (1 = CRC-8 included)
-Bits 2-7: Reserved
+sync    type    flags   msg_id  payload_len |    fn_ptr      number of arguments    arguments      checksum (if enabled)
+AA      01      ...     ...     ...         |    ...         ...                    ...            ...
+```
+
+
+---
+
+### **RETURN:**
+```
+sync    type    flags   msg_id  payload_len |   code    function_id    msg_id   checksum (if enabled)
+AA      02      ...     ...     1           |   ...     ...            ...      ...
+
+ReturnCode: 0=Success, 1=Error, 2=Invalid Function
 ```
 
 ---
 
-### **Complete Message Specifications**
-
-#### **1. IMMEDIATE_CALL (0x01)**
-**Request**:
+### **DATA_CHUNK:**
 ```
-AA 01 [Flags] [MsgID] [PayloadLen] [FuncID:1] [ArgCount:1] [Args...] [CRC]
-```
-- **Small args**: Inline in payload
-- **Large args**: Replace with `[DataID:1]`
-
-**Response**:
-```
-AA 01 00 [MsgID] [PayloadLen] [ReturnCode:1] [ReturnData...] [CRC]
-```
-- `ReturnCode`: 0=Success, 1=Error, 2=Invalid Function
-- **Small returns**: Inline in payload
-- **Large returns**: `[DataID:1]` followed by DATA_START
-
-#### **2. QUEUE_CALL (0x02)**
-```
-AA 02 [Flags] [MsgID] [PayloadLen] [FuncID:1] [ArgCount:1] [Args...] [CRC]
-```
-- Same argument handling as IMMEDIATE_CALL
-
-#### **3. LOOP_START (0x03)**
-```
-AA 03 [Flags] [MsgID] [PayloadLen] [LoopID:1] [CRC]
-```
-
-#### **4. LOOP_STOP (0x04)**
-```
-AA 04 [Flags] [MsgID] [PayloadLen] [LoopID:1] [CRC]
-```
-
-#### **5. RUN_QUEUE (0x05)**
-```
-AA 05 [Flags] [MsgID] [PayloadLen] [Iterations:4] [CRC]
-```
-- `Iterations`: 0 = infinite
-
-#### **6. QUEUE_START (0x06)**
-```
-AA 06 [Flags] [MsgID] [PayloadLen] [QueueID:1] [CRC]
-```
-
-#### **7. QUEUE_END (0x07)**
-```
-AA 07 [Flags] [MsgID] [PayloadLen] [QueueID:1] [Status:1] [CRC]
-```
-- `Status`: 0=Success, 1=Error, 2=Cancelled
-
-#### **8. DATA_START (0x0E)**
-```
-AA 0E [Flags] [MsgID] [PayloadLen] [DataID:1] [TotalSize:4] [CRC]
-```
-- Initiates data transfer
-- `DataID`: 1-255 (0 reserved)
-- `TotalSize`: 0 = unknown (streaming)
-
-#### **9. DATA_CHUNK (0x0F)**
-```
-AA 0F [Flags] [MsgID] [PayloadLen] [DataID:1] [ChunkID:2] [Data:N] [CRC]
-```
-- Contains partial data
-- `ChunkID`: 0-65535
-
-#### **10. DATA_END (0x10)**
-```
-AA 10 [Flags] [MsgID] [PayloadLen] [DataID:1] [Status:1] [CRC]
-```
-- Completes data transfer
-- `Status`: 0=Success, 1=Error
-
-#### **11. STREAM_OPEN (0x11)**
-```
-AA 11 [Flags] [MsgID] [PayloadLen] [StreamID:1] [Direction:1] [CRC]
-```
-- `Direction`: 0=Input, 1=Output
-
-#### **12. STREAM_CLOSE (0x12)**
-```
-AA 12 [Flags] [MsgID] [PayloadLen] [StreamID:1] [Status:1] [CRC]
-```
-
-#### **13. ACK (0x0A)**
-```
-AA 0A 00 [MsgID] 00 00 [CRC]
-```
-
-#### **14. NAK (0x0B)**
-```
-AA 0B 00 [MsgID] 00 01 [ErrorCode] [CRC]
-```
-- `ErrorCode`: 1=Checksum fail, 2=Invalid type, 3=Queue full, 4=Data error
-
-#### **15. HANDSHAKE (0x0C)**
-**Request**:
-```
-AA 0C [Flags] [MsgID] [PayloadLen] [Version] [MaxChunkSize] [Capabilities] [CRC]
-```
-**Response**:
-```
-AA 0C 00 [MsgID] [PayloadLen] [AgreedChunkSize] [Status] [CRC]
+sync    type    flags   msg_id  payload_len |   data_id     data    checksum (if enabled)
+AA      03      ...     ...     ...         |   ...         ...     ...
 ```
 
 ---
+
+### **OPEN_STREAM:**
+```
+sync    type    flags   msg_id  payload_len |   checksum (if enabled)
+AA      04      ...     ...      ...        |   ...
+```
+
+---
+
+### **CLOSE_STREAM:**
+```
+sync    type    flags   msg_id  payload_len |   checksum (if enabled)
+AA      05      ...     ...     ...         |   ...
+```
+
+---
+
+### **ACK:**
+```
+sync    type    flags   msg_id  payload_len |   checksum (if enabled)
+AA      06      ...     ...     ...         |   ...
+```
+
+---
+
+### **NACK:**
+```
+sync    type    flags   msg_id  payload_len |   checksum (if enabled)
+AA      07      ...     ...     ...         |   ...
+```
+
+---
+
+### **HANDSHAKE:**
+```
+sync    type    flags   msg_id  payload_len |   version     capabilities    checksum (if enabled)
+AA      08      ...     ...     ...         |   ...         ...             ...
+```
+
+---
+
+# **State Machines**
+
+### **IMMEDIATE_CALL:**
+```
+PC:
+[Send IMMEDIATE_CALL] → [yield] → [Process RETURN]
+
+EXPERIMENT PLATFORM:
+[Receive IMMEDIATE_CALL] → [Process] → [Send RETURN]
+                                     → [Send OPEN_STREAM] → [Send DATA_CHUNK]* → [Send CLOSE_STREAM] → [Send RETURN]
+```
+
+```mermaid
+sequenceDiagram
+  PC->>+ExpPlatform: Send IMMEDIATE_CALL
+  opt
+      PC->>ExpPlatform: Send OPEN_STREAM
+      PC->>ExpPlatform: Send DATA_CHUNK
+  end
+  alt
+    ExpPlatform-->>PC: Send RETURN
+  else
+    ExpPlatform-->>PC: Send OPEN_STREAM
+    loop
+      ExpPlatform-->>PC: Send DATA_CHUNK
+    end
+    ExpPlatform-->>PC: Send CLOSE_STREAM
+    ExpPlatform-->>PC: Send RETURN
+  end
+```
+
+
+---
+
+### **OPEN_STREAM:**
+```
+PC:
+[Send OPEN_STREAM]      → [Send DATA_CHUNK]*    → [Process RETURN]
+                                                → [Process OPEN_STREAM] → [Process DATA_CHUNK]* → [Process CLOSE_STREAM] → [Process RETURN]
+
+EXPERIMENT PLATFORM:
+[Receive OPEN_STREAM]   → [Process DATA_CHUNK]* → [Send RETURN]
+                                                → [Send OPEN_STREAM]    → [Send DATA_CHUNK]*    → [Send STREAM_CLOSE]    → [Send RETURN] 
+```
+
+---
+
+
+# **TO-DO**
 
 ### **Data Transfer Examples**
 
