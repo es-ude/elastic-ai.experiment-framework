@@ -8,7 +8,7 @@ function(__register_target_as_unit_test target)
     set_property(TEST ${target} PROPERTY LABELS unit)
 endfunction()
 
-function(add_elastic_ai_unit_test)
+function(add_unity_test)
     # You only need to specify the LIB_UNDER_TEST.
     # The function will automatically try to compile a file with the same name, but
     # the prefix `Unittest` and link against LIB_UNDER_TEST.

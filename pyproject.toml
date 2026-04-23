@@ -10,6 +10,7 @@ dependencies = [
     "fabric>=3.2.2",
     "invoke>=2.2.1",
     "pyserial>=3.4",
+    "pyserial-asyncio-fast",
 ]
 
 
@@ -64,6 +65,9 @@ omit = [
 ]
 source = ["src/elasticai/experiment_framework"]
 command_line = "-m pytest tests/unit"
+
+[tool.uv.sources]
+pyserial-asyncio-fast = { git = "https://github.com/home-assistant-libs/pyserial-asyncio-fast" }
 
 [tool.pytest]
 testpaths = ["tests/unit"]

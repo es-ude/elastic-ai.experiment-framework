@@ -29,7 +29,7 @@
       "generator": "Ninja",
       "binaryDir": "build/${presetName}",
       "cacheVariables": {
-        "ELASTIC_AI_TARGET": "ENV5_2"
+        "ELASTIC_AI_TARGET": "ENV5_REV2"
       }
     },
     {

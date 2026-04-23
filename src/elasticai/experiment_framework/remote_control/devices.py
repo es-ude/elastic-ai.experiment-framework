@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Generator
 from contextlib import contextmanager
 from abc import abstractmethod
@@ -6,6 +7,7 @@ from serial.tools import list_ports
 from dataclasses import dataclass
 from serial import Serial as _Serial
 from .io_stream import IOStream
+from serial_asyncio_fast import open_serial_connection as _async_connect
 
 
 @dataclass(frozen=True)
@@ -32,6 +34,7 @@ class _SerialDevice(Device):
     def __init__(self, spec: _DeviceSpec, comport: str) -> None:
         self._spec = spec
         self._comport = comport
+        self.baudrate: int = 9600
 
     @property
     def name(self) -> str:
@@ -39,8 +42,11 @@ class _SerialDevice(Device):
 
     @contextmanager
     def connect(self) -> Generator[IOStream]:
-        with _Serial(self._comport) as opened:
+        with _Serial(self._comport, baudrate=self.baudrate) as opened:
             yield _SerialIOStream(opened)
+
+    async def connect_async(self) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        return await _async_connect(port=self._comport, baudrate=self.baudrate)
 
 
 class _SerialIOStream(IOStream):

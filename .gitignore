@@ -23,3 +23,9 @@ build/
 
 **/__pycache__/
 .coverage
+
+# jj
+.jj
+
+# clion
+.idea

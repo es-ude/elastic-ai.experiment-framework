@@ -55,11 +55,11 @@ static void predict(const uint8_t *input_data, size_t input_length, uint8_t *out
 
 static void receiveInput(uint8_t *buffer, size_t bufferLength, size_t chunk_size)
 {
-    size_t chunkId = 0;
+
     uint8_t nackCounter = 0;
-    uint8_t *next = buffer;
-    size_t num_chunks = (size_t)(ceilf((float)(bufferLength) / (float)(chunk_size)));
-    while (chunkId < num_chunks)
+    uint8_t *current_chunk = buffer;
+    size_t remaining_byte;
+    while (remaining_byte > 0)
     {
         if (nackCounter >= MAX_RETRIES)
         {
@@ -72,19 +72,22 @@ static void receiveInput(uint8_t *buffer, size_t bufferLength, size_t chunk_size
             nackCounter++;
             continue;
         }
-        memcpy(next, message.payload, message.payloadLength);
+        else
+        {
+            memcpy(current_chunk, message.payload, message.payloadLength);
 
-        chunkId++;
-        next += message.payloadLength;
-        nackCounter = 0;
+            current_chunk += message.payloadLength;
+            remaining_byte -= message.payloadLength;
+            nackCounter = 0;
 
-        free(message.payload);
+            free(message.payload);
+        }
     }
 }
 
 static void sendOutput(uint8_t *buffer, uint8_t command, size_t bufferLength, size_t chunk_size)
 {
-    size_t remainingBytes = bufferLength;
+    int remainingBytes = bufferLength;
     uint8_t nackCounter = 0;
     usbProtocolMessage_t message;
     message.command = command;
@@ -144,17 +147,6 @@ void get_id(const uint8_t *,
     usbProtocolSendMessage(&msg);
 }
 
-void inference(const uint8_t *data, size_t length)
-{
-    uint32_t input_length = convertByteArrayToUint32(data);
-    uint32_t output_length = convertByteArrayToUint32(data + sizeof(uint32_t));
-    uint32_t max_length = max(input_length, output_length);
-    uint8_t buffer[max_length];
-    receiveInput(buffer, input_length, 1 << 9);
-    predict(buffer, input_length, buffer, output_length);
-    sendOutput(buffer, 243, output_length, 1 << 9);
-}
-
 enum COMMANDS
 {
     READ_WRITE_FPGA_SPI = 250
@@ -208,6 +200,58 @@ _Noreturn void runExperiment(void)
     }
 }
 
+typedef struct ChunkWriter ChunkWriter;
+struct ChunkWriter
+{
+    uint8_t *start_position;
+    uint8_t *current_position;
+    void (*write)(ChunkWriter *, const uint8_t *, int);
+};
+
+void writeChunk(ChunkWriter *self, const uint8_t *src, int size)
+{
+    memcpy(self->current_position, src, size);
+    self->current_position += size;
+}
+
+void receiveChunks(size_t total_size, ChunkWriter *writer)
+{
+    usbProtocolMessage_t msg;
+    int32_t remainder = total_size;
+    while (remainder > 0)
+    {
+        usbProtocolReadMessage(&msg);
+        remainder -= msg.payloadLength;
+        writer->write(writer, msg.payload, msg.payloadLength);
+        free(msg.payload);
+    }
+}
+
+void fake_inference(const uint8_t *data, size_t length)
+{
+    uint32_t input_length = convertByteArrayToUint32(data);
+    uint32_t output_length = convertByteArrayToUint32(data + sizeof(uint32_t));
+    uint32_t max_length = max(input_length, output_length);
+    uint8_t buffer[max_length];
+    memset(buffer, 0, max_length);
+    ChunkWriter writer = {.current_position = buffer, .start_position = buffer, .write = writeChunk};
+    receiveChunks(input_length, &writer);
+    sendOutput(buffer, 244, output_length, 256);
+}
+
+void inference(const uint8_t *data, size_t length)
+{
+    uint32_t input_length = convertByteArrayToUint32(data);
+    uint32_t output_length = convertByteArrayToUint32(data + sizeof(uint32_t));
+    uint32_t max_length = max(input_length, output_length);
+    uint8_t buffer[max_length];
+    memset(buffer, 0, max_length);
+    ChunkWriter writer = {.current_position = buffer, .start_position = buffer, .write = writeChunk};
+    receiveChunks(input_length, &writer);
+    predict(buffer, input_length, buffer, output_length);
+    sendOutput(buffer, 244, output_length, 1 << 9);
+}
+
 typedef struct Command
 {
     void (*fn)(const uint8_t *, size_t);
@@ -220,11 +264,13 @@ int main(void)
     Command commands[] = {
         {.fn = get_id, .id = 242},
         {.fn = inference, .id = 243},
+        {.fn = fake_inference, .id = 244},
         {.fn = read_write_fpga_spi, .id = READ_WRITE_FPGA_SPI},
     };
     for (int i = 0; i < sizeof(commands) / sizeof(commands[0]); i++)
     {
         usbProtocolRegisterCommand(commands[i].id, commands[i].fn);
     }
+
     runExperiment();
 }

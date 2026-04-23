@@ -47,7 +47,7 @@ class SynthesisConfig:
     target: TargetPlatforms
     remote_working_dir: str
     vivado_path: str
-    quiet: bool = False
+    quiet: bool = True
 
 
 def _run_synthesis(config: SynthesisConfig) -> Path:

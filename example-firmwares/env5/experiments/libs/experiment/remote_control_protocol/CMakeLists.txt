@@ -1,0 +1,2 @@
+add_library(remote_control_protocol remote_control_protocol.c)
+target_include_directories(remote_control_protocol PUBLIC ${CMAKE_CURRENT_LIST_DIR})

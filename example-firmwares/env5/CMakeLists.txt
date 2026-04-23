@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21...3.24)
 include(${CMAKE_SOURCE_DIR}/cmake/load_third_party_deps.cmake)
-set(ELASTIC_AI_TARGET ENV5_REV2)
+include(${CMAKE_SOURCE_DIR}/cmake/unit_test_framework.cmake)
 
 add_runtime_enV5("v5.6.2")
 
