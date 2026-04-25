@@ -1,6 +1,6 @@
 [project]
 name = "elasticai.experiment_framework"
-version = "0.1.0"
+version = "0.2.0"
 description = ""
 readme = "README.md"
 authors = [{ name = "Lukas Einhaus", email = "lukas.einhaus@uni-due.de" }]
