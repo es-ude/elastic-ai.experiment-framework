@@ -16,7 +16,7 @@ The tool opens a server on Port 8080 and listens there for a connection using th
 - [ ] `HANDSHAKE` (`0x07`) - Optional handshake message.
 
 - [ ] Memory Managment (Free)
-- [ ] Move Testcase in seperate files 
+- [x] Move Testcase in seperate files 
 
 ## Components
 
@@ -24,9 +24,11 @@ The tool opens a server on Port 8080 and listens there for a connection using th
 - `sockets.c` / `sockets.h` - TCP server/client helpers for establishing and accepting connections.
 - `embedded_functions.c` / `embedded_functions.h` - Defines the functions that can be invoked remotely and the dispatcher that executes them by function ID.
 - `task_manager.c` / `task_manager.h` - Task pool management, task queuing, and task lifecycle handling.
+- `frame_builder.c` / `frame_builder.h` - Builder functions for creating specific frame types 
 - `enums.h` - Protocol constants such as message types and task/stream status flags.
 - `frame.h` - Frame structure definitions for the protocol.
 - `CMakeLists.txt` - Build entrypoint for the embedded remote control executable.
+- `embedded_test.c` - Runs a test client which tests some message scenarios
 
 ## Protocol Overview
 
@@ -83,17 +85,34 @@ This produces the `embedded_remote_control` executable.
 
 ## Run
 
-The program starts the embedded-side server and processing threads. If provided a command-line argument, it also starts a test client thread that sends an `OPEN_TASK` message with the argument as payload.
+The program starts the embedded-side server and processing threads. 
 
 Example:
 
 ```bash
-./embedded_remote_control fnc_id "hello"
+./embedded_remote_control 
 ```
 
 The embedded-side server listens on port `8080` and waits for a host connection.
 
+
+## Tests
+
+To test the sending of text back and forth build the test c file with cmake in the tests folder:
+
+```bash
+mkdir -p build
+cd build
+cmake ..
+cmake --build .
+```
+
+and run it 
+
+```bash
+./embedded_remote_control_test
+```
+
 ## Notes
 
 - The current implementation is intended as a prototype.
-- `task_queue` and `sending_queue` are fixed size and do not currently protect against queue overflow.
