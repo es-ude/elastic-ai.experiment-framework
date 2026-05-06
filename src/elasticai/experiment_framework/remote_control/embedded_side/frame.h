@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define FRAME_OVERHEAD 5
+#define FRAME_OVERHEAD 6
 #define CHECKSUM_SIZE 1
 
 typedef struct
@@ -12,7 +12,7 @@ typedef struct
     uint8_t message_type;
     uint8_t flags;
     uint8_t msg_id;
-    uint8_t payload_len;
+    uint16_t payload_len;
 } Frameheader;
 
 typedef struct
