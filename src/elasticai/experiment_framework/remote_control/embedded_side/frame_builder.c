@@ -27,7 +27,6 @@ int frame_builder_return(Frame *frame, uint8_t flags, uint8_t return_code, uint8
 int frame_builder_data_chunk(Frame *frame, uint8_t flags, uint8_t *data, uint8_t data_len,
                              uint8_t task_id, uint8_t starting_data_id, uint64_t max_chunk_size)
 {
-    printf("[FB] Start building data chunk\n");
     // Split the data into chunks if it exceeds the maximum chunk size
     if (data_len > max_chunk_size)
     {
@@ -53,7 +52,6 @@ int frame_builder_data_chunk(Frame *frame, uint8_t flags, uint8_t *data, uint8_t
         memcpy(&frame->payload[2], data, data_len); // Copy the function result data into the payload
     }
 
-    printf("[FB] Data_chunk built\n");
     return amount_chunks;
 }
 

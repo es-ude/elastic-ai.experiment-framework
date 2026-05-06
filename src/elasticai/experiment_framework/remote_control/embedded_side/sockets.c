@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 
 int msg_id = 0; // Global message ID counter for tracking messages
 
@@ -22,25 +23,24 @@ Server start_server(int port)
 {
     printf("[Server] Starting server...\n");
     int server_fd, client_fd;
-    struct sockaddr_in addr;
+    struct sockaddr_in addr = {0};
     char buffer[1024] = {0};
+    int result;
 
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
-
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(port);
-
-    uint8_t result;
     do
     {
+        server_fd = socket(AF_INET, SOCK_STREAM, 0);
+
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = INADDR_ANY;
+        addr.sin_port = htons(port);
+
         result = bind(server_fd, (struct sockaddr *)&addr, sizeof(addr));
         if (result < 0)
         {
-            printf(
-                "[Server] Failed to bind server socket with error %d. Trying again in 1 second ...\n",
-                result);
+            perror("[Server] bind failed. retrying in 1 second");
             sleep(1);
+            continue;
         }
 
     } while (result < 0);
@@ -85,11 +85,16 @@ Client start_client(int port)
     return (Client){.server_fd = sock};
 }
 
+void close_connection(int fd)
+{
+    close(fd);
+}
+
 // Enqueue a message to be sent by the sending thread. This function is thread-safe and can be
 // called from any thread to send a message to the server.
 void enqueue_message(SendOrder *order)
 {
-    printf("[Sockets] Enqueuing message with ID: %d\n", order->frame.header.msg_id);
+    // printf("[Sockets] Enqueuing message with ID: %d\n", order->frame.header.msg_id);
     pthread_mutex_lock(&sending_queue_mutex);
     sending_queue[sending_queue_tail] = *order;
     sending_queue_tail = (sending_queue_tail + 1) % OUTGOING_QUEUE_SIZE;
@@ -109,7 +114,7 @@ SendOrder dequeue_message()
         pthread_cond_wait(&sending_queue_cond, &sending_queue_mutex);
     }
     SendOrder order = sending_queue[sending_queue_head];
-    printf("[Sockets] Dequeued message with ID: %d\n", order.frame.header.msg_id);
+    // printf("[Sockets] Dequeued message with ID: %d\n", order.frame.header.msg_id);
     sending_queue_head = (sending_queue_head + 1) % OUTGOING_QUEUE_SIZE;
     pthread_mutex_unlock(&sending_queue_mutex);
     return order;

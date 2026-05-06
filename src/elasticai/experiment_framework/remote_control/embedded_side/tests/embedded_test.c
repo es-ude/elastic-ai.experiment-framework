@@ -5,32 +5,27 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 
-void *client_thread(void *arg)
+int test_mirror_reply(Client client, cli_params *p)
 {
-    Client client =
-        start_client(8080); // Start the Client for sending responses and data back to the Host
-
-    cli_params *p = (cli_params *)arg;
-
-    // Example send order 1. Open Task 2. receive Return with task_id 3. send Datachunk with text 4. Send empty Datachunk to confirm 5. receive Datachunk with text 6. receive return
-
+    int test_result, chunks_generated, task_id;
+    Frame open_task_frame, server_response, data_chunk_frame;
+    SendOrder send_order;
     // step 1
-    Frame open_task_frame;
     frame_builder_open_task(&open_task_frame, 0x00, p->fnc_id);
 
-    SendOrder send_order = {.fd = client.server_fd, .frame = open_task_frame};
+    send_order = (SendOrder){.fd = client.server_fd, .frame = open_task_frame};
     enqueue_message(&send_order);
     printf("Step 1\n");
 
     // step 2
-    Frame server_response = read_frame(client.server_fd); // Wait for a response from the server
-    int task_id = server_response.payload[1];             // this will be a return message so payload index 1
+    server_response = read_frame(client.server_fd); // Wait for a response from the server
+    task_id = server_response.payload[1];           // this will be a return message so payload index 1
     printf("Step 2: Got Task Id %i\n", task_id);
     // step 3
-    Frame data_chunk_frame;
 
-    int chunks_generated = frame_builder_data_chunk(&data_chunk_frame, 0x00, (uint8_t *)p->message, strlen(p->message), task_id, 0, 1024);
+    chunks_generated = frame_builder_data_chunk(&data_chunk_frame, 0x00, (uint8_t *)p->message, strlen(p->message), task_id, 0, 1024);
     send_order = (SendOrder){.fd = client.server_fd, .frame = data_chunk_frame};
     enqueue_message(&send_order);
     printf("Step 3\n");
@@ -45,24 +40,43 @@ void *client_thread(void *arg)
     print_payload(server_response.payload, server_response.header.payload_len);
     uint8_t *data = &server_response.payload[2]; // Data Chunk with text as reply expected
     printf("[Client] Message Received: %s\n", (char *)data);
+    if (strcmp((char *)data, p->message))
+    {
+        printf("[Test] Test failed. Sent \"%s\" and got \"%s\".\n", (char *)data, p->message);
+        test_result = 0;
+    }
+    else
+    {
+        printf("[Test] Test successful. Sent \"%s\" and got \"%s\".\n", (char *)data, p->message);
+        test_result = 1;
+    }
     printf("Step 5\n");
     // step 6
     server_response = read_frame(client.server_fd); // Wait for a response from the server
     task_id = server_response.payload[1];           // this will be a return message so payload index
     printf("Step 6\n");
 
-    while (1)
-    {
+    return test_result;
+}
 
-        server_response = read_frame(client.server_fd); // Wait for a response from the server (this will block
-                                                        // until a response is received)
-        printf("[Client] Received response from server - Control Byte: %02X, Type: %02X, Flags: "
-               "%02X, Msg ID: %02X, Payload Len: %d\n",
-               server_response.header.start_byte, server_response.header.message_type,
-               server_response.header.flags, server_response.header.msg_id,
-               server_response.header.payload_len);
-        print_payload(server_response.payload, server_response.header.payload_len);
+void *client_thread(void *arg)
+{
+    Client client =
+        start_client(8080); // Start the Client for sending responses and data back to the Host
+
+    cli_params *p = (cli_params *)arg;
+
+    // Example send order 1. Open Task 2. receive Return with task_id 3. send Datachunk with text 4. Send empty Datachunk to confirm 5. receive Datachunk with text 6. receive return
+
+    switch (p->fnc_id)
+    {
+    case 0:
+        assert(test_mirror_reply(client, p));
+    case 1:
+        test_mirror_reply(client, p);
     }
+
+    close_connection(client.server_fd);
 
     return NULL;
 }
@@ -86,7 +100,5 @@ int main(int argc, char const *argv[])
         pthread_create(&client_t, NULL, client_thread, p);
     }
 
-    while (1)
-    {
-    }
+    pthread_join(client_t, NULL);
 }

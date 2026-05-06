@@ -14,6 +14,8 @@ typedef struct
 Server start_server(int port);
 Client start_client(int port);
 
+void close_connection(int fd);
+
 void enqueue_message(SendOrder *order);
 SendOrder dequeue_message();
 
