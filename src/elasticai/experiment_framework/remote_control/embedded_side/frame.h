@@ -23,7 +23,7 @@ typedef struct
 
 typedef struct
 {
-    uint8_t socket;
+    uint8_t fd;
     Frame frame;
 } SendOrder;
 

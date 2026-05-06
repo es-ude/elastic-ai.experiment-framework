@@ -31,14 +31,19 @@ Server start_server(int port)
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port = htons(port);
 
-    int result = bind(server_fd, (struct sockaddr *)&addr, sizeof(addr));
-    while (result < 0)
+    uint8_t result;
+    do
     {
-        printf(
-            "[Server] Failed to bind server socket with error %d. Trying again in 1 second ...\n",
-            result);
-        sleep(1);
-    }
+        result = bind(server_fd, (struct sockaddr *)&addr, sizeof(addr));
+        if (result < 0)
+        {
+            printf(
+                "[Server] Failed to bind server socket with error %d. Trying again in 1 second ...\n",
+                result);
+            sleep(1);
+        }
+
+    } while (result < 0);
 
     if (listen(server_fd, 3) < 0)
     {
@@ -121,13 +126,13 @@ void print_payload(uint8_t *payload, uint8_t payload_len)
 }
 
 /* Send the frame over the socket */
-int send_frame(int socket, Frame *frame)
+int send_frame(int fd, Frame *frame)
 {
     msg_id = (msg_id + 1) % 256;   // Increment global message ID for each sent message
     frame->header.msg_id = msg_id; // Assign the global message ID for tracking
-    send(socket, &frame->header, FRAME_OVERHEAD,
-         0);                                                    // Send the header first (start_byte, message_type, flags, msg_id, payload_len)
-    send(socket, frame->payload, frame->header.payload_len, 0); // Send the payload separately
+    send(fd, &frame->header, FRAME_OVERHEAD,
+         0);                                                // Send the header first (start_byte, message_type, flags, msg_id, payload_len)
+    send(fd, frame->payload, frame->header.payload_len, 0); // Send the payload separately
     printf("\n");
     printf("[Sockets] Sent frame "
            "with header:\n ID: %d, Type: %02X, Flags %02X, Payload Length: %d\n",
@@ -141,10 +146,10 @@ int send_frame(int socket, Frame *frame)
 
 // Read a frame from the socket. This function will block until a complete frame is received (header
 // + payload).
-Frame read_frame(int socket)
+Frame read_frame(int fd)
 {
     uint8_t header_buffer[FRAME_OVERHEAD] = {0};
-    read(socket, header_buffer, FRAME_OVERHEAD); // Read the header first
+    read(fd, header_buffer, FRAME_OVERHEAD); // Read the header first
 
     Frame frame = {.header = {.start_byte = header_buffer[0],
                               .message_type = header_buffer[1],
@@ -156,8 +161,19 @@ Frame read_frame(int socket)
     if (frame.header.payload_len > 0)
     {
         frame.payload = malloc(frame.header.payload_len);
-        read(socket, frame.payload, frame.header.payload_len); // Read the payload separately
+        read(fd, frame.payload, frame.header.payload_len); // Read the payload separately
     }
 
     return frame; // Success
+}
+
+// Waits for send_orders to be queued and sends them
+void *sending_thread(void *arg)
+{
+    while (1)
+    {
+        SendOrder send_order = dequeue_message(); // Wait for a message to be enqueued by the server thread
+        send_frame(send_order.fd, &(send_order.frame));
+    }
+    return NULL;
 }
