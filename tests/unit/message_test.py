@@ -1,14 +1,93 @@
-from elasticai.experiment_framework.remote_control.message import Message
+import pytest
+
+from elasticai.experiment_framework.remote_control.commands import (
+    Command,
+)
+from elasticai.experiment_framework.remote_control.constants import (
+    HEADER_SIZE,
+)
+from elasticai.experiment_framework.remote_control.flags import Flags
+from elasticai.experiment_framework.remote_control.header import Header
+from elasticai.experiment_framework.remote_control.message import (
+    Message,
+)
 
 
-def test_to_and_from_bytes_are_equal():
-    raw = b"\x03\x00\x00\x00\x04\x00\x00\x02\x00\x05"
-    msg = Message.from_bytes(raw)
-    actual = msg.to_bytes()
-    assert actual == raw
+@pytest.fixture
+def header():
+    return Header(
+        Command.ACK,
+        Flags(need_ack=True, has_crc=False),
+        task_id=100,
+        msg_id=45,
+        payload_len=11,
+    )
 
 
-def test_get_flash_chunk_size_response_checksum_is_0():
-    response_from_env5 = b"\x03\x00\x00\x00\x04\x00\x00\x02\x00\x05"
-    msg = Message.from_bytes(response_from_env5)
-    assert msg.checksum == b"\x05"
+def test_empty_payload():
+    msg = Message(
+        Command.ACK,
+        b"",
+        flags=0,
+        task_id=0,
+    )
+
+    data = msg.to_bytes()
+    parsed = Message.from_bytes(data)
+
+    assert parsed.payload == b""
+    assert parsed.header.payload_len == 0
+
+
+def test_to_bytes(header):
+    payload = b"Hello world"
+
+    msg = Message(
+        header.command,
+        payload,
+        header.flags.to_byte(),
+        header.task_id,
+        header.msg_id,
+    )
+
+    data = msg.to_bytes()
+
+    assert data[:HEADER_SIZE] == header.to_bytes()
+    assert data[HEADER_SIZE:] == payload
+
+
+def test_from_bytes(header):
+    payload = b"Hello world"
+    data = header.to_bytes() + payload
+    msg = Message.from_bytes(data)
+    assert msg.header == header
+    assert msg.payload == payload
+
+
+def test_raises_exception_when_invalid_payload_length(header):
+
+    raw = header.to_bytes() + b"TOO_LONG_PAYLOAD"
+
+    with pytest.raises(Exception):
+        Message.from_bytes(raw)
+
+
+def test_message_round_trip():
+    msg1 = Message(
+        Command.ACK,
+        b"Hello world",
+        flags=0x01,
+        task_id=42,
+    )
+
+    data = msg1.to_bytes()
+    msg2 = Message.from_bytes(data)
+
+    assert msg1 == msg2
+
+
+def test_message_equality():
+    m1 = Message(Command.ACK, b"abc", flags=1, task_id=7)
+    m2 = Message(Command.ACK, b"abc", flags=1, task_id=7)
+
+    assert m1 == m2

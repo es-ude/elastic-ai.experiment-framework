@@ -1,127 +1,73 @@
-from collections.abc import Iterator
-from typing import Iterable, Literal
+from typing import Literal
 
 from .commands import Command
+from .constants import NUM_BYTES_FOR_ID
+from .flags import Flags
 from .message import Message
-
-
-def _batched_bytes(iterable: bytes | bytearray, batch_size: int) -> Iterator[bytes]:
-    b = bytearray()
-    for i in iterable:
-        b.append(i)
-        if len(b) == batch_size:
-            yield bytes(b)
-            b.clear()
-    if len(b) > 0:
-        yield bytes(b)
 
 
 class MessageBuilder:
     def __init__(self) -> None:
-        self.flash_chunk_size = 256
-        self.flash_address = 0
-        self.data = bytes()
-        self.num_read_bytes = 1
-        self.byte_order: Literal["big", "little"] = "big"
-        self._NUM_BYTES_FOR_LENGTH = 4
-        self.command: int | Command = Command.NAK
-        self.expected_response_size = 1
+        self.data = b""
+        self.byte_order: Literal["big", "little"] = "little"
+        self.command: Command = Command.NACK
+        self.task_def_id = 0
+        self.task_id = 0
+        self.msg_id = 0
+        self.need_ack = False
 
-    @property
-    def payload(self) -> bytes:
-        return self.data
+    def set_command(self, cmd: Command) -> "MessageBuilder":
+        self.command = cmd
+        return self
 
-    @payload.setter
-    def payload(self, v: bytes) -> None:
-        self.data = v
+    def set_task_id(self, task_id: int) -> "MessageBuilder":
+        self.task_id = task_id
+        return self
 
-    def build(self) -> Iterator[Message]:
+    def set_task_def_id(self, task_def_id: int) -> "MessageBuilder":
+        self.task_def_id = task_def_id
+        return self
+
+    def set_msg_id(self, msg_id: int) -> "MessageBuilder":
+        self.msg_id = msg_id
+        return self
+
+    def set_data(self, data: bytes) -> "MessageBuilder":
+        self.data = data
+        return self
+
+    def set_need_ack(self, ack: bool) -> "MessageBuilder":
+        self.need_ack = ack
+        return self
+
+    def build(self) -> Message:
         match self.command:
-            case (
-                Command.NAK
-                | Command.ACK
-                | Command.READ_SKELETON_ID
-                | Command.GET_FLASH_CHUNK_SIZE
-            ):
-                yield self._command_without_payload()
-            case Command.WRITE_TO_FLASH:
-                yield from self._write_to_flash()
-            case Command.READ_FROM_FLASH:
-                yield from self._read_from_flash()
-            case Command.FPGA_LEDS | Command.MCU_LEDS | Command.FPGA_POWER:
-                yield self._simple_message_with_payload()
-            case Command.INFERENCE:
-                yield from self._command_with_payload_and_response()
-            case Command.DEPLOY_MODEL:
-                yield self._deploy_model()
+            case Command.NACK | Command.ACK:
+                return self._new_msg()
+            case Command.OPEN_TASK:
+                return self._new_msg(self._get_number_in_bytes(self.task_def_id))
+            case Command.CLOSE_TASK:
+                return self._new_msg()
+            case Command.DATA_CHUNK:
+                return self._new_msg(self.data)
+            case Command.RETURN:
+                return self._new_msg(self.data)
             case _:
-                if self.expected_response_size == 0 and len(self.data) == 0:
-                    yield self._command_without_payload()
-                elif self.expected_response_size == 0:
-                    yield self._simple_message_with_payload()
-                else:
-                    yield from self._command_with_payload_and_response()
+                raise NotImplementedError(
+                    f"Command {self.command} not implemented in MessageBuilder"
+                )
 
     def _get_number_in_bytes(self, number: int) -> bytes:
         return number.to_bytes(
-            length=self._NUM_BYTES_FOR_LENGTH, byteorder=self.byte_order, signed=False
+            length=NUM_BYTES_FOR_ID, byteorder=self.byte_order, signed=False
         )
 
-    def _new_msg(self, data: bytes) -> Message:
-        return Message(self.command, data, self.byte_order)
-
-    def _command_without_payload(self) -> Message:
-        return Message(self.command, bytes())
-
-    def _simple_message_with_payload(self) -> Message:
-        return self._new_msg(self.data)
-
-    @property
-    def _address_in_bytes(self) -> bytes:
-        return self._get_number_in_bytes(self.flash_address)
-
-    @property
-    def _data_size_in_bytes(self) -> bytes:
-        return self._get_number_in_bytes(len(self.data))
-
-    @property
-    def _num_read_bytes_in_bytes(self) -> bytes:
-        return self._get_number_in_bytes(self.num_read_bytes)
-
-    def _generate_message_chunks(self) -> Iterator[Message]:
-        for chunk in _batched_bytes(self.data, self.flash_chunk_size):
-            yield self._new_msg(chunk)
-
-    @property
-    def inference_input_length(self) -> int:
-        return len(self.data)
-
-    def _deploy_model(self) -> Message:
-        return self._new_msg(
-            b"".join((self._get_number_in_bytes(self.flash_address), self.data))
-        )
-
-    def _command_with_payload_and_response(self) -> Iterable[Message]:
-        yield self._new_msg(
-            b"".join(
-                map(
-                    self._get_number_in_bytes,
-                    (
-                        self.inference_input_length,
-                        self.expected_response_size,
-                    ),
-                )
-            )
-        )
-        yield from self._generate_message_chunks()
-
-    def _write_to_flash(self) -> Iterable[Message]:
-        yield self._new_msg(
-            b"".join((self._address_in_bytes, self._data_size_in_bytes)),
-        )
-        yield from self._generate_message_chunks()
-
-    def _read_from_flash(self) -> Iterable[Message]:
-        yield self._new_msg(
-            b"".join((self._address_in_bytes, self._num_read_bytes_in_bytes)),
+    def _new_msg(self, data: bytes = b"") -> Message:
+        return Message(
+            self.command,
+            data,
+            flags=Flags(need_ack=self.need_ack).to_byte(),
+            task_id=self.task_id,
+            msg_id=self.msg_id,
+            byte_order=self.byte_order,
         )

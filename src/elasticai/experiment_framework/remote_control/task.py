@@ -1,0 +1,55 @@
+import asyncio
+from abc import ABC, abstractmethod
+from enum import Enum, auto
+from typing import AsyncGenerator, Dict
+
+from elasticai.experiment_framework.remote_control.constants import (
+    RESPONSE_TIMEOUT,
+)
+
+from .callback_actions import CallbackAction, NoAction
+
+
+class TaskState(Enum):
+    OPENING = auto()
+    OPENED = auto()
+    RECEIVED_DATA = auto()
+    FINISHED = auto()
+
+
+class Task(ABC):
+    def __init__(self, task_def_id: int) -> None:
+        self.timeout: float = RESPONSE_TIMEOUT
+        self.need_ack: bool = False
+        self.task_def_id: int = task_def_id
+
+        self._task_id: int = 0
+        self._state: TaskState = TaskState.OPENING
+        self._opened_event: asyncio.Event = asyncio.Event()
+        self._finished_event: asyncio.Event = asyncio.Event()
+        self._next_msg_id: int = 0
+        self._received_data: dict[int, bytes] = {}
+        self._pending_acks: Dict[int, asyncio.Future] = {}
+
+    @property
+    def task_id(self) -> int:
+        return self._task_id
+
+    @property
+    def state(self) -> TaskState:
+        return self._state
+
+    @property
+    def received_data(self) -> dict[int, bytes]:
+        return self._received_data
+
+    async def on_opened(self) -> AsyncGenerator[CallbackAction, None]:
+        yield NoAction()
+
+    @abstractmethod
+    async def on_data_chunk_received(self) -> AsyncGenerator[CallbackAction, None]:
+        yield NoAction()
+
+    @abstractmethod
+    async def on_return(self) -> AsyncGenerator[CallbackAction, None]:
+        yield NoAction()
