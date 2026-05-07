@@ -1,3 +1,4 @@
+from elasticai.experiment_framework.remote_control.commands import Command
 from elasticai.experiment_framework.remote_control.devices import (
     detect_device,
     probe_for_devices,
@@ -16,9 +17,9 @@ def test_probe_for_device() -> None:
     assert "env5" in [d.name for d in devices]
 
 
-def test_talk_to_device() -> None:
+async def test_talk_to_device() -> None:
     device = probe_for_devices()[0]
     with device.connect() as iostream:
-        iostream.write(Message(8, bytes.fromhex("00")).to_bytes())
-        result = iostream.read(6)
-    assert result.hex(" ") == "01 00 00 00 00 01"
+        await iostream.write(Message(Command.ACK, payload=b"").to_bytes())
+        result = await iostream.read(6)
+    assert result.hex(" ") == "AA 05 00 00 00 00 00"

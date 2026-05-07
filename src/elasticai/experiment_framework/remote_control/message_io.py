@@ -1,94 +1,42 @@
-from typing import Literal
 import logging
 
-from .commands import Command
+from .constants import HEADER_SIZE
+from .header import Header
+from .helpers import format_message
 from .io_stream import IOStream
 from .message import Message
 
 
 class MessageIO:
-    def __init__(
-        self,
-        io_stream: IOStream,
-        byte_order: Literal["big"] | Literal["little"],
-        ack: Message,
-        nak: Message,
-        max_trials: int = 5,
-    ) -> None:
-        self._stream = io_stream
-        self._byte_order = byte_order
-        self._ACK = ack
-        self._NAK = nak
-        self._last_msg = ack
-        self._last_checksum = ack.checksum
-        self._max_trials = max_trials
+    def __init__(self, stream: IOStream):
+        self._stream = stream
         self._logger = logging.getLogger(__name__)
 
-    def _fetch_new_message(self) -> None:
-        raw_command = self._do_read(Message.NUM_BYTES_COMMAND)
-        raw_length = self._do_read(Message.NUM_BYTES_PAYLOAD_SIZE)
-        length = int.from_bytes(raw_length, self._byte_order)
-        command = int.from_bytes(raw_command, self._byte_order)
-        if command in Command:
-            command = Command(command)
-        data = self._do_read(length + Message.NUM_BYTES_CHECKSUM)
-        data, self._last_checksum = (
-            data[:-1],
-            data[-1:],
-        )  # data[i] returns int instead of byte, so we do data[i:]
-        self._last_msg = Message(command, data, self._byte_order)
-        self._logger.debug(f"received new message: {self._last_msg}", stacklevel=3)
-
-    def _checksum_was_valid(self) -> bool:
-        return self._last_checksum == self._last_msg.checksum
-
-    def _send_ack(self) -> None:
-        self._do_write(self._ACK.to_bytes())
-
-    def _send_nak(self) -> None:
-        self._do_write(self._NAK.to_bytes())
-
-    def _acknowledge_required(self) -> bool:
-        return self._last_msg.command not in (Command.NAK, Command.ACK)
-
-    def read(self) -> Message:
-        self._fetch_new_message()
-        if self._acknowledge_required():
-            if self._checksum_was_valid():
-                self._send_ack()
-            else:
-                self._send_nak()
-        if not self._checksum_was_valid():
-            self._logger.debug("invalid checksum", stacklevel=1)
-
-        return self._last_msg
-
-    def _do_write(self, data: bytes) -> None:
-        self._logger.debug(f"writing raw data {data}", stacklevel=2)
-        self._stream.write(data)
-
-    def _do_read(self, num_bytes: int) -> bytes:
-        self._logger.debug(f"reading {num_bytes} bytes", stacklevel=2)
-        data = self._stream.read(num_bytes)
-        self._logger.debug(f"read data {data}", stacklevel=2)
+    async def _do_read(self, num_bytes) -> bytes:
+        self._logger.debug(f"[CLIENT] {num_bytes} bytes", stacklevel=2)
+        data = await self._stream.read(num_bytes)
+        self._logger.debug(f"[CLIENT] read data {data}", stacklevel=2)
         return bytes(data)
 
-    def write(self, msg: Message) -> None:
-        self._logger.debug(f"sending {msg}", stacklevel=3)
-        b = msg.to_bytes()
-        self._do_write(b)
-        rec = self._NAK
-        for t in range(self._max_trials):
-            rec = self.read()
-            if rec.command == self._ACK.command:
-                self._logger.debug(f"received valid ack on trial {t}")
-                break
-            elif t < self._max_trials - 1:
-                self._logger.debug(
-                    f"got {rec.command} instead of ACK, retry sending", stacklevel=2
-                )
-                self._do_write(b)
-        if rec == self._NAK:
-            raise IOError(
-                f"number of trials exceeded for writing message {msg.to_bytes()}"
-            )
+    async def read(self) -> Message:
+        header_bytes = await self._do_read(HEADER_SIZE)
+        self._logger.debug(
+            "[CLIENT] received header: %s", header_bytes.hex(), stacklevel=3
+        )
+        header = Header.from_bytes(header_bytes)
+
+        payload = await self._do_read(header.payload_len)
+        self._logger.debug("[CLIENT] received payload: %s", payload.hex(), stacklevel=3)
+
+        msg = Message.from_bytes(header_bytes + payload)
+        self._logger.debug(
+            "[CLIENT] received message: %s", format_message(msg), stacklevel=3
+        )
+
+        return msg
+
+    async def write(self, msg: Message) -> None:
+        self._logger.debug(
+            "[CLIENT] sending message: %s", format_message(msg), stacklevel=3
+        )
+        await self._stream.write(msg.to_bytes())
