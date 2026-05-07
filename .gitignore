@@ -20,8 +20,9 @@ external/
 .vscode
 build/
 **/.vscode
-
+coverage.xml
 **/__pycache__/
 .DS_*
 .coverage
 .cache/
+
