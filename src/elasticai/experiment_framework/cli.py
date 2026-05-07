@@ -1,18 +1,13 @@
 import click
 import elasticai.experiment_framework.synthesis as synth
 
-import elasticai.experiment_framework.remote_control as rc
 
-
+@click.group()
 def cli():
-    @click.group
-    def main():
-        pass
+    pass
 
-    main.add_command(rc.main, name="rc")
-    main.add_command(synth.main, "synth")
 
-    main()
+cli.add_command(synth.main, name="synth")
 
 
 if __name__ == "__main__":

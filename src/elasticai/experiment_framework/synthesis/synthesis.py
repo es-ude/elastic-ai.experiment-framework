@@ -1,14 +1,14 @@
-import logging
-import warnings
-from collections.abc import Mapping, Iterator, Iterable
-import os
 import dataclasses
+import logging
+import os
+import warnings
 from abc import abstractmethod
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from enum import StrEnum, auto
-from pathlib import Path
-from typing import Protocol, Self, runtime_checkable, override
 from hashlib import blake2s
+from pathlib import Path
+from typing import Protocol, Self, override, runtime_checkable
 
 
 class TargetPlatforms(StrEnum):
@@ -92,7 +92,7 @@ class CachedSynthesis[S: SynthesisConfig](SynthesisStrategy):
         digest_dir.parent.mkdir(exist_ok=True)
 
         if not digest_dir.exists() or len(list(digest_dir.iterdir())) == 0:
-            self._logger.info("cache miss -> run synthesis...")
+            self._logger.debug("[CLIENT] cache miss -> run synthesis...")
             target = digest_dir
             if str(out_path).endswith(".tar.gz"):
                 target = digest_dir / "synthesis_result.tar.gz"
