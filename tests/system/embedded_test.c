@@ -1,17 +1,19 @@
-#include "../sockets.h"
-#include "../frame_builder.h"
+#include "../../src/elasticai/experiment_framework/remote_control/embedded_side//sockets.h"
+#include "../../src/elasticai/experiment_framework/remote_control/embedded_side/frame_builder.h"
 #include "embedded_test.h"
 #include <stdlib.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <string.h>
-#include <assert.h>
 
 int test_mirror_reply(Client client, cli_params *p)
 {
     int test_result, chunks_generated, task_id;
     Frame open_task_frame, server_response, data_chunk_frame;
     SendOrder send_order;
+
+    // Example send order 1. Open Task 2. receive Return with task_id 3. send Datachunk with text 4. Send empty Datachunk to confirm 5. receive Datachunk with text 6. receive return
+
     // step 1
     frame_builder_open_task(&open_task_frame, 0x00, p->fnc_id);
 
@@ -43,12 +45,12 @@ int test_mirror_reply(Client client, cli_params *p)
     if (strcmp((char *)data, p->message))
     {
         printf("[Test] Test failed. Sent \"%s\" and got \"%s\".\n", (char *)data, p->message);
-        test_result = 0;
+        test_result = 1; // failure
     }
     else
     {
         printf("[Test] Test successful. Sent \"%s\" and got \"%s\".\n", (char *)data, p->message);
-        test_result = 1;
+        test_result = 0; // correct
     }
     printf("Step 5\n");
     // step 6
@@ -66,19 +68,19 @@ void *client_thread(void *arg)
 
     cli_params *p = (cli_params *)arg;
 
-    // Example send order 1. Open Task 2. receive Return with task_id 3. send Datachunk with text 4. Send empty Datachunk to confirm 5. receive Datachunk with text 6. receive return
+    int *result = malloc(sizeof(int));
 
     switch (p->fnc_id)
     {
     case 0:
-        assert(test_mirror_reply(client, p));
+        *result = test_mirror_reply(client, p);
     case 1:
         test_mirror_reply(client, p);
     }
 
     close_connection(client.server_fd);
 
-    return NULL;
+    return result;
 }
 
 int main(int argc, char const *argv[])
@@ -100,5 +102,12 @@ int main(int argc, char const *argv[])
         pthread_create(&client_t, NULL, client_thread, p);
     }
 
-    pthread_join(client_t, NULL);
+    void *return_value;
+    pthread_join(client_t, &return_value);
+    int *result = (int *)return_value;
+    int result_value = *result;
+    printf("Result: %d\n", result_value);
+
+    free(result);
+    return result_value;
 }
