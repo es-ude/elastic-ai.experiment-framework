@@ -1,9 +1,24 @@
-# Protocol constants
+from enum import Enum
+import struct
 SYNC_BYTE = 0xAA
-HEADER_SIZE = 6
+HEADER_FORMAT = "<BBBBH"
+HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
+NUM_MAX_RETRIES = 10
+RETRY_DELAY_SECONDS = 1.0
+MAX_TRANSACTIONS = 0xFF
 
-# Field sizes in bytes
-NUM_BYTES_FOR_ID = 1  # task_id, data_id, func_id
+CONNECTION_TIMEOUT_SECONDS = 10
 
-# Message ID range
+NUM_BYTES_FOR_ID = 1
+
 MAX_MSG_ID = 255
+
+class TransportType(Enum):
+    TCP = 0x01
+    UDP = 0x02
+    SERIAL = 0x03
+    
+    
+MAX_CONNECTED_DEVICES = 4
+
+NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD = 0

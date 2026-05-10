@@ -1,172 +1,170 @@
+# remote_task_controller.py
+import asyncio
 import logging
-import threading
-from dataclasses import dataclass, field
-from typing import Dict, Literal, Optional
+from operator import ne
+from sys import flags
+from typing import Dict, Optional
 
-from .commands import Command
-from .message import Message
-from .message_builder import MessageBuilder
-from .message_io import MessageIO
-from .constants import MAX_MSG_ID, NUM_BYTES_FOR_ID
+from elasticai.experiment_framework.remote_control_v2.message import Message
+from elasticai.experiment_framework.remote_control_v2.message_builder import MessageBuilder
 
-
-@dataclass
-class TaskContext:
-    request_msg_id: int
-    task_id: Optional[int] = None
-    next_data_id: int = 0
-    state: str = "opening"
-    expected_response_text: bytes = field(default_factory=bytes)
-    received_data: bytearray = field(default_factory=bytearray)
-    verification_passed: Optional[bool] = None
-    opened_event: threading.Event = field(default_factory=threading.Event)
-    finished_event: threading.Event = field(default_factory=threading.Event)
-
+from .commands       import Command
+from .flags          import Flags
+from .task_context   import TaskContext
+from .task_definition import TaskDefinition
+from .task_registry  import TaskRegistry
+from .device_session import DeviceSession
+from .constants      import MAX_TRANSACTIONS, NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD
 
 class RemoteTaskController:
-    """Manage a single open-task context with msg_id/task_id correlation."""
 
-    def __init__(self, message_io: MessageIO, byte_order: Literal["big", "little"] = "little") -> None:
-        self._message_io = message_io
-        self._byte_order = byte_order
-        self._logger = logging.getLogger(__name__)
-        self._lock = threading.Lock()
-        self._last_msg_id = 0
-        self._pending_contexts: Dict[int, TaskContext] = {}
-        self._active_context: Optional[TaskContext] = None
+    def __init__(self, device: DeviceSession, registry: TaskRegistry) -> None:
+        self._device   = device
+        self._registry = registry
+        self._logger   = logging.getLogger(__name__)
 
-    @property
-    def active_context(self) -> Optional[TaskContext]:
-        return self._active_context
+        self._tasks: Dict[int, tuple[TaskContext, TaskDefinition]] = {}
 
-    def _next_msg_id(self) -> int:
-        self._last_msg_id = (self._last_msg_id + 1) & MAX_MSG_ID
-        if self._last_msg_id == 0:
-            self._last_msg_id = 1
-        return self._last_msg_id
 
-    def _to_bytes(self, value: int) -> bytes:
-        return value.to_bytes(NUM_BYTES_FOR_ID, byteorder=self._byte_order, signed=False)
+    async def open_task(self, func_id: int) -> TaskContext:
+        definition = self._registry.get(func_id)
+        tid        = self._next_transaction_id()
+        ctx        = TaskContext(transaction_id=tid)
+        need_ack = definition.need_ack
 
-    def _write_message(self, msg: Message) -> None:
-        with self._lock:
-            self._message_io.write(msg)
-            self._logger.debug("Sent %s", msg)
+        self._tasks[tid] = (ctx, definition)
+        self._device.expect(tid, lambda msg: asyncio.create_task(self._on_message(msg)))
 
-    def open_task(self, func_id: int, payload: bytes = b"") -> TaskContext:
-        if self._active_context is not None:
-            raise RuntimeError("Only one active task context is allowed")
+        print(f"[open_task] func_id={func_id} tid={tid} need_ack={need_ack}")
 
-        msg_id = self._next_msg_id()
-        ctx = TaskContext(request_msg_id=msg_id)
-        self._pending_contexts[msg_id] = ctx
+        msg = next(
+            MessageBuilder()
+                .set_command(Command.OPEN_TASK)
+                .set_transaction_id(tid)
+                .set_func_id(func_id)
+                .set_need_ack(need_ack)
+                .build()
+        )
+        await self._device.connection.send(msg.to_bytes())
 
-        builder = MessageBuilder()
-        builder.byte_order = self._byte_order
-        builder.command = Command.OPEN_TASK
-        builder.func_id = func_id
-        builder.data = payload
-        builder.msg_id = msg_id
-        msg = next(builder.build())
-        self._write_message(msg)
-
-        self._logger.info("Opened task context request msg_id=%d", msg_id)
+        if need_ack: 
+            print(f"[open_task] waiting for opened_event tid={tid}")
+            await asyncio.wait_for(ctx.opened_event.wait(), timeout=definition.timeout)
+            print(f"[open_task] task opened tid={tid}")
+        
+        if (on_opened := definition.on_opened) is not None:
+                    async def send(data: bytes) -> None:
+                        await self.send_chunk(ctx, data)
+                    await on_opened(ctx, send)
         return ctx
 
-    def send_data_chunk(self, text: bytes = b"") -> int:
-        if self._active_context is None or self._active_context.task_id is None:
-            raise RuntimeError("No active task context available")
 
-        msg_id = self._next_msg_id()
-        context = self._active_context
-        builder = MessageBuilder()
-        builder.byte_order = self._byte_order
-        builder.command = Command.DATA_CHUNK
-        builder.task_id = context.task_id
-        builder.data_id = context.next_data_id
-        builder.data = text
-        builder.msg_id = msg_id
-        msg = next(builder.build())
-        context.next_data_id += 1
-        self._write_message(msg)
+    async def send_chunk(self, ctx: TaskContext, data: bytes) -> None:
+        _, definition = self._tasks[ctx.transaction_id]
+        need_ack      = definition.need_ack
+        data_id       = ctx.next_data_id
 
-        self._logger.info(
-            "Sent DATA_CHUNK msg_id=%d task_id=%s data_id=%d payload_len=%d",
-            msg_id,
-            context.task_id,
-            context.next_data_id - 1,
-            len(text),
+        print(f"[send_chunk] tid={ctx.transaction_id} data_id={data_id} len={len(data)} need_ack={need_ack}")
+
+        if need_ack:
+            fut = asyncio.get_running_loop().create_future()
+            ctx._pending_acks[data_id] = fut
+
+        msg = next(
+            MessageBuilder()
+                .set_command(Command.DATA_CHUNK)
+                .set_transaction_id(ctx.transaction_id)
+                .set_data_id(data_id)
+                .set_data(data)
+                .set_need_ack(need_ack)
+                .build()
         )
-        return msg_id
+        ctx.next_data_id += 1
+        await self._device.connection.send(msg.to_bytes())
+        print(f"[send_chunk] sent tid={ctx.transaction_id} data_id={data_id}")
 
-    def expect_response_text(self, expected: bytes) -> None:
-        if self._active_context is None:
-            raise RuntimeError("No active task context available")
-        self._active_context.expected_response_text = expected
+        if need_ack:
+            print(f"[send_chunk] waiting for ACK tid={ctx.transaction_id} data_id={data_id}")
+            await asyncio.wait_for(fut, timeout=definition.timeout)
+            print(f"[send_chunk] ACK received tid={ctx.transaction_id} data_id={data_id}")
 
-    def handle_incoming_message(self, msg: Message) -> Optional[TaskContext]:
-        context = self._pending_contexts.pop(msg.header.msg_id, None)
 
-        if msg.header.command == Command.RETURN:
-            if context is not None and context.state == "opening":
-                task_id = self._parse_task_id(msg.payload)
-                context.task_id = task_id
-                context.state = "opened"
-                context.opened_event.set()
-                self._active_context = context
-                self._logger.info("Task opened msg_id=%d task_id=%d", msg.header.msg_id, task_id)
-                return context
+    async def _on_message(self, message: Message) -> None:
+        try:
+            print(f"[_on_message] message= {message}")
 
-            if self._active_context is not None and self._active_context.task_id is not None:
-                self._active_context.state = "finished"
-                self._active_context.finished_event.set()
-                self._logger.info(
-                    "Task finished task_id=%d msg_id=%d",
-                    self._active_context.task_id,
-                    msg.header.msg_id,
-                )
-                finished_context = self._active_context
-                self._active_context = None
-                return finished_context
+            flags = message.header.flags
+            tid = message.header.transaction_id
+            payload = message.payload
+            cmd = message.header.command
 
-            self._logger.debug("Received RETURN with no matching context msg_id=%d", msg.header.msg_id)
-            return None
+            print(f"[_on_message] cmd={cmd} tid={tid}")
 
-        if msg.header.command == Command.DATA_CHUNK and self._active_context is not None:
-            task_id = self._parse_task_id(msg.payload)
-            data_id = int.from_bytes(msg.payload[NUM_BYTES_FOR_ID:NUM_BYTES_FOR_ID*2], byteorder=self._byte_order, signed=False)
-            chunk_data = msg.payload[NUM_BYTES_FOR_ID*2:]
+            entry = self._tasks.get(tid)
+            if entry is None:
+                print(f"[_on_message] unknown tid={tid} — dropping")
+                self._logger.warning("unknown tid=%d", tid)
+                return
 
-            if task_id != self._active_context.task_id:
-                self._logger.warning(
-                    "Received DATA_CHUNK for unexpected task_id=%d (active=%s)",
-                    task_id,
-                    self._active_context.task_id,
-                )
-                return None
+            ctx, definition = entry
+            if cmd == Command.ACK:
+                if  ctx.state == "opening":
+                    print(f"[_on_message] RETURN → task opened tid={tid}")
+                    ctx.state = "opened"
+                    ctx.opened_event.set()
+                    return
 
-            self._active_context.received_data.extend(chunk_data)
-            self._active_context.state = "received_data"
-            self._active_context.verification_passed = (
-                chunk_data == self._active_context.expected_response_text
-            )
-            self._logger.info(
-                "Received DATA_CHUNK task_id=%d data_id=%d len=%d verified=%s",
-                task_id,
-                data_id,
-                len(chunk_data),
-                self._active_context.verification_passed,
-            )
-            return self._active_context
+                data_id = payload[NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD]
+                print(f"[_on_message] ACK tid={tid} data_id={data_id}")
+                fut = ctx._pending_acks.pop(data_id, None)
+                if fut and not fut.done():
+                    fut.set_result(True)
+                    print(f"[_on_message] ACK resolved future tid={tid} data_id={data_id}")
+                else:
+                    print(f"[_on_message] unexpected ACK tid={tid} data_id={data_id}")
+                    self._logger.warning("unexpected ACK tid=%d data_id=%d", tid, data_id)
+                return
 
-        self._logger.warning("Unhandled incoming message: %s", msg)
-        return None
+            if cmd == Command.DATA_CHUNK:
+                data_id = payload[NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD]
+                chunk   = payload[NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD:]
+                print(f"[_on_message] DATA_CHUNK tid={tid} data_id={data_id} len={len(chunk)}: {chunk.hex()}")
 
-    def receive_and_handle_once(self) -> Optional[TaskContext]:
-        msg = self._message_io.read()
-        return self.handle_incoming_message(msg)
+                ctx.received_data.extend(chunk)
+                ctx.state = "received_data"
 
-    def _parse_task_id(self, payload: bytes) -> int:
-        if len(payload) < NUM_BYTES_FOR_ID:
-            raise ValueError("Payload is too short to contain a task_id")
-        return int.from_bytes(payload[:NUM_BYTES_FOR_ID], byteorder=self._byte_order, signed=False)
+                if flags.need_ack:
+                    print(f"[_on_message] sending ACK tid={tid} data_id={data_id}")
+                    ack = next(
+                        MessageBuilder()
+                            .set_command(Command.ACK)
+                            .set_transaction_id(tid)
+                            .set_data_id(data_id)
+                            .build()
+                    )
+                    await self._device.connection.send(ack.to_bytes())
+
+                if (on_data_chunk := definition.on_data_chunk_received) is not None:
+                    await on_data_chunk(ctx, chunk)
+                return
+
+            if cmd == Command.RETURN and ctx.state in ("opened", "received_data"):
+                print(f"[_on_message] RETURN → task finished tid={tid}")
+                ctx.state = "finished"
+                ctx.finished_event.set()
+                self._tasks.pop(tid)
+
+                if (on_finished := definition.on_finished) is not None:
+                    await on_finished(ctx)
+
+        except Exception as e:
+            print(f"[_on_message] ERROR: {e}")
+            self._logger.error("error handling message: %s", e)
+            raise
+        
+    def _next_transaction_id(self) -> int:
+        used = set(self._tasks.keys())
+        for tid in range(1, MAX_TRANSACTIONS):
+            if tid not in used:
+                return tid
+        raise RuntimeError(f"all {MAX_TRANSACTIONS} transaction IDs in use")

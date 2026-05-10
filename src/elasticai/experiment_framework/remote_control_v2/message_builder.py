@@ -1,56 +1,48 @@
 from collections.abc import Iterator
+from enum import Flag
 from typing import Iterable, Literal
+
+from elasticai.experiment_framework.remote_control_v2.flags import Flags
 
 from .commands import Command
 from .message import Message
 from .constants import NUM_BYTES_FOR_ID
 
-
-def _batched_bytes(iterable: bytes | bytearray, batch_size: int) -> Iterator[bytes]:
-    b = bytearray()
-    for i in iterable:
-        b.append(i)
-        if len(b) == batch_size:
-            yield bytes(b)
-            b.clear()
-    if len(b) > 0:
-        yield bytes(b)
-
-
 class MessageBuilder:
     def __init__(self) -> None:
-        self.chunk_size = 1024
-        self.data = bytes()
-        self.num_read_bytes = 1
-        self.byte_order: Literal["big", "little"] = "big"
+        self.data = b""
+        self.byte_order: Literal["big", "little"] = "little"
         self._NUM_BYTES_FOR_LENGTH = NUM_BYTES_FOR_ID
         self.command: Command = Command.NACK
-        self.expected_response_size = 1
         self.func_id = 0
-        self.task_id = 0 
         self.data_id = 0
-        self.msg_id = 0
-        self.msg_id = 0
+        self.transaction_id = 0
+        self.need_ack = False
 
-    @property
-    def payload(self) -> bytes:
-        return self.data
+    def set_command(self, cmd: Command)      -> "MessageBuilder": self.command        = cmd;  return self
+    def set_transaction_id(self, tid: int)   -> "MessageBuilder": self.transaction_id = tid;  return self
+    def set_func_id(self, fid: int)          -> "MessageBuilder": self.func_id        = fid;  return self
+    def set_data_id(self, did: int)          -> "MessageBuilder": self.data_id        = did;  return self
+    def set_data(self, data: bytes)          -> "MessageBuilder": self.data           = data; return self
+    def set_need_ack(self, ack: bool)        -> "MessageBuilder": self.need_ack       = ack;  return self
 
-    @payload.setter
-    def payload(self, v: bytes) -> None:
-        self.data = v
-
+ 
     def build(self) -> Iterator[Message]:
         match self.command:
-            case (
-                Command.NACK
-                | Command.ACK
-            ):
-                yield self._command_without_payload()
+            case (Command.NACK| Command.ACK):
+                yield self._new_msg(self._get_number_in_bytes(self.data_id))
             case Command.OPEN_TASK:
-                yield from self._open_task()
+                yield self._new_msg(
+                    self._get_number_in_bytes(self.func_id)
+                )
+            case Command.CLOSE_TASK:
+                yield self._new_msg(b"")
             case Command.DATA_CHUNK:
-                yield from self._data_chunk()
+                yield self._new_msg(
+                    self._get_number_in_bytes(self.data_id) + self.data
+                )
+            case Command.RETURN:
+                yield self._new_msg(self.data)
             case _:
                 raise NotImplementedError(f"Command {self.command} not implemented in MessageBuilder")
 
@@ -63,37 +55,8 @@ class MessageBuilder:
         return Message(
             self.command,
             data,
-            msg_id=self.msg_id,
+            flags= Flags(self.need_ack).to_byte(),
+            transaction_id=self.transaction_id,
             byte_order=self.byte_order,
         )
 
-    def _command_without_payload(self) -> Message:
-        return Message(self.command, bytes())
-
-    def _simple_message_with_payload(self) -> Message:
-        return self._new_msg(self.data)
-    
-    def _message_with_payload(self) -> Message:
-        return self._new_msg(self.data)
-
-    @property
-    def _data_size_in_bytes(self) -> bytes:
-        return self._get_number_in_bytes(len(self.data))
-
-
-
-    def _data_chunk(self) -> Iterator[Message]:
-        yield self._new_msg(
-            b"".join((
-                self._get_number_in_bytes(self.task_id),
-                self._get_number_in_bytes(self.data_id),
-                self.data,
-            ))
-        )
-    def _open_task(self) -> Iterator[Message]:
-        yield self._new_msg(
-            b"".join((
-                self._get_number_in_bytes(self.func_id),
-                self.data,
-            ))
-        )
