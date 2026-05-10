@@ -19,16 +19,22 @@ configure_file(
 )
 
 add_library(embedded_common
-        ${SRC_DIR_SERVER}/sockets.c
+        ${SRC_DIR_SERVER}/connection_manager.c
         ${SRC_DIR_SERVER}/frame_builder.c
+        ${SRC_DIR_SERVER}/ThreadSafeQueue.c
+        ${SRC_DIR_SERVER}/sender.c
+        ${SRC_DIR_SERVER}/receiver.c       
+        ${SRC_DIR_SERVER}/task_manager.c
+        ${SRC_DIR_SERVER}/msg_handler.c
+        
+        ${SRC_DIR_SERVER}/embedded_functions.c
         )
 
 
 add_executable(
     embedded_remote_control
-    ${SRC_DIR_SERVER}/embedded_protocol.c
-    ${SRC_DIR_SERVER}/embedded_functions.c
-    ${SRC_DIR_SERVER}/task_manager.c
+    ${SRC_DIR_SERVER}/main.c
+    
 )
 
 target_link_libraries(embedded_remote_control
@@ -43,6 +49,12 @@ add_executable(
 
 target_link_libraries(embedded_remote_control_test
                         PRIVATE embedded_common)
+
+
+
+
+
+
 
 
 

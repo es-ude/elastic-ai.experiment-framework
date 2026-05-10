@@ -21,10 +21,4 @@ typedef struct
     uint8_t *payload;
 } Frame;
 
-typedef struct
-{
-    uint8_t fd;
-    Frame frame;
-} SendOrder;
-
 #endif
