@@ -1,8 +1,13 @@
+#ifndef TASK_MANAGER_H
+#define TASK_MANAGER_H
+
 #include "frame.h"
+#include "ThreadSafeQueue.h"
 #include <stdbool.h>
 #include <stdint.h>
 
 #define MAX_TASKS 32
+#define QUEUE_TASK_LEN 16
 
 typedef struct
 {
@@ -31,9 +36,14 @@ typedef struct
     StreamManager stream_manager;
 } Task;
 
+extern ThreadSafeQueue *task_queue;
+
 void init_tasks();
 void enqueue_task(Task *task);
 Task dequeue_task();
 int prepare_task(Frame *frame, uint8_t server_fd, uint8_t client_fd);
 Task *get_task_by_id(uint8_t task_id);
-int start_task(uint8_t task_id);
+int start_task(Task *task);
+void *tasks_thread(void *arg);
+
+#endif

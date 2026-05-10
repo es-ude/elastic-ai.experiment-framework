@@ -1,5 +1,9 @@
-#include "../../src/elasticai/experiment_framework/remote_control/embedded_side//sockets.h"
+#include "../../src/elasticai/experiment_framework/remote_control/embedded_side/connection_manager.h"
 #include "../../src/elasticai/experiment_framework/remote_control/embedded_side/frame_builder.h"
+#include "../../src/elasticai/experiment_framework/remote_control/embedded_side/ThreadSafeQueue.h"
+#include "../../src/elasticai/experiment_framework/remote_control/embedded_side/sender.h"
+#include "../../src/elasticai/experiment_framework/remote_control/embedded_side/receiver.h"
+#include "../../src/elasticai/experiment_framework/remote_control/embedded_side/task_manager.h"
 #include "embedded_test.h"
 #include <stdlib.h>
 #include <pthread.h>
@@ -18,7 +22,7 @@ int test_mirror_reply(Client client, cli_params *p)
     frame_builder_open_task(&open_task_frame, 0x00, p->fnc_id);
 
     send_order = (SendOrder){.fd = client.server_fd, .frame = open_task_frame};
-    enqueue_message(&send_order);
+    queue_push(outgoing_queue, &send_order);
     printf("Step 1\n");
 
     // step 2
@@ -29,12 +33,12 @@ int test_mirror_reply(Client client, cli_params *p)
 
     chunks_generated = frame_builder_data_chunk(&data_chunk_frame, 0x00, (uint8_t *)p->message, strlen(p->message), task_id, 0, 1024);
     send_order = (SendOrder){.fd = client.server_fd, .frame = data_chunk_frame};
-    enqueue_message(&send_order);
+    queue_push(outgoing_queue, &send_order);
     printf("Step 3\n");
     // step 4
     chunks_generated = frame_builder_data_chunk(&data_chunk_frame, 0x00, 0, 0, task_id, chunks_generated, 1024); // Chunks generated als start für data_id
     send_order = (SendOrder){.fd = client.server_fd, .frame = data_chunk_frame};
-    enqueue_message(&send_order);
+    queue_push(outgoing_queue, &send_order);
     printf("Step 4\n");
 
     // step 5
@@ -87,6 +91,8 @@ int main(int argc, char const *argv[])
 {
     pthread_t client_t, sending_t;
 
+    init_sending_queue();
+
     pthread_create(&sending_t, NULL, sending_thread, NULL);
 
     // If there is a command-line argument, start the client thread to send a message to the server
@@ -105,6 +111,7 @@ int main(int argc, char const *argv[])
     void *return_value;
     pthread_join(client_t, &return_value);
     int *result = (int *)return_value;
+    fflush(stdout);
     int result_value = *result;
     printf("Result: %d\n", result_value);
 

@@ -1,20 +1,19 @@
 #include "task_manager.h"
 #include "enums.h"
+#include "embedded_functions.h"
+#include "connection_manager.h"
+#include "frame_builder.h"
+#include "sender.h"
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+ThreadSafeQueue *task_queue = NULL;
 
 // Task pool
 Task tasks[MAX_TASKS];          // Support up to MAX_TASKS concurrent tasks
 int free_task_slots[MAX_TASKS]; // contains free task indices
 int free_tasks;
-
-// Queued Tasks
-Task task_queue[MAX_TASKS]; // Support up to MAX_TASKS concurrent tasks
-int task_queue_head = 0, task_queue_tail = 0;
-
-pthread_mutex_t task_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t task_queue_cond = PTHREAD_COND_INITIALIZER;
 
 // Initialize the task management system by marking all task slots as free.
 void init_tasks()
@@ -23,13 +22,13 @@ void init_tasks()
     {
         tasks[i].task_id = i;
         tasks[i].status = TASK_STATUS_IDLE; // Mark all tasks as idle
-    }
 
-    for (int i = 0; i < MAX_TASKS; i++)
-    {
         free_task_slots[i] = i; // Mark all task slots as free
     }
+
     free_tasks = MAX_TASKS; // All tasks are initially free
+
+    task_queue = queue_create(QUEUE_TASK_LEN, sizeof(Task));
 }
 
 // Enqueue a task to be processed by the tasks thread. This function is thread-safe and can be
@@ -40,26 +39,15 @@ void enqueue_task(Task *task)
            "stream_incoming: %d\n",
            task->task_id, task->function_id, task->stream_manager.outgoing_connection.connection_fd,
            task->stream_manager.incoming_connection.connection_fd);
-    pthread_mutex_lock(&task_queue_mutex);
-    task_queue[task_queue_tail] = *task;
-    task_queue_tail = (task_queue_tail + 1) % MAX_TASKS;
-    pthread_cond_signal(&task_queue_cond); // Signal the tasks thread that a new task is available
-    pthread_mutex_unlock(&task_queue_mutex);
+    queue_push(task_queue, task);
 }
 
 // Dequeue a task to be processed by the tasks thread. This function will block if the queue is
 // empty until a new task is enqueued.
 Task dequeue_task()
 {
-    pthread_mutex_lock(&task_queue_mutex);
-    while (task_queue_head == task_queue_tail)
-    { // No tasks in the queue, wait for a task to be enqueued
-        pthread_cond_wait(&task_queue_cond, &task_queue_mutex);
-    }
-    Task task = task_queue[task_queue_head];
-    printf("[Task Manager] Dequeuing task with ID: %d\n", task.task_id);
-    task_queue_head = (task_queue_head + 1) % MAX_TASKS;
-    pthread_mutex_unlock(&task_queue_mutex);
+    Task task;
+    queue_pop(task_queue, &task);
     return task;
 }
 
@@ -89,9 +77,10 @@ int prepare_task(Frame *frame, uint8_t server_fd, uint8_t client_fd)
 
     task->stream_manager = stream_manager; // Associate the task with the provided stream
                                            // manager for handling its data streams
-    printf("[Task] Task prepared with id %i\n", index);
+    printf("[Task] Task prepared with id %i and fnc_id %i\n", index, task->function_id);
     return index;
 }
+
 // Retrieve a pointer to a task by its ID. Returns NULL if the task ID is invalid or if the task is idle
 Task *get_task_by_id(uint8_t task_id)
 {
@@ -103,11 +92,53 @@ Task *get_task_by_id(uint8_t task_id)
 }
 
 // Starts a task
-int start_task(uint8_t task_id)
+int start_task(Task *task)
 {
-    Task *t = get_task_by_id(task_id);
-    t->status = TASK_STATUS_RUNNING;
-    enqueue_task(t); // Enqueue the task to be processed by the tasks thread
-    printf("[Task] Started task with ID %i", task_id);
+    task->status = TASK_STATUS_RUNNING;
+    queue_push(task_queue, task); // Enqueue the task to be processed by the tasks thread
+    printf("[Task] Started task with ID %i\n", task->task_id);
     return 0;
+}
+
+// Runs Tasks that were added to to task queue. Sends Reply messages if necessary
+void *tasks_thread(void *arg)
+{
+    Frame response_frame;
+    Task task;
+
+    init_tasks(); // Initialize the task management system
+
+    while (1)
+    {
+        task = dequeue_task(); // Wait for a task to be enqueued by the server thread when a
+                               // new OPEN_TASK message is received
+        printf("[Task] Processing task with ID: %d\n", task.task_id);
+
+        ReturnValue result = execute_function(
+            task.function_id,
+            task.input_data); // Execute the function associated with the task using its input data
+
+        task.output_data = result.raw_data; // Store the result in the task's output data field
+        task.output_data_len = result.raw_data_len;
+
+        int msg_type = result.return_msg_id;
+        switch (msg_type)
+        {
+        case RETURN:
+            frame_builder_return(&response_frame, 0x00, 0x00, task.task_id,
+                                 task.task_id);
+        case DATA_CHUNK:
+            frame_builder_data_chunk(&response_frame, 0x00, task.output_data, task.output_data_len, task.task_id, 0, 1024);
+            queue_push(outgoing_queue,
+                       &(SendOrder){.fd = task.stream_manager.outgoing_connection.connection_fd,
+                                    .frame = response_frame}); // send Data first
+            frame_builder_return(&response_frame, 0x00, 0x00, task.task_id,
+                                 task.task_id); // send a return as last step
+        }
+
+        queue_push(outgoing_queue,
+                   &(SendOrder){.fd = task.stream_manager.outgoing_connection.connection_fd,
+                                .frame = response_frame});
+    }
+    return NULL;
 }
