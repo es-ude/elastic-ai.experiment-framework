@@ -10,7 +10,13 @@
 
 int msg_open_task(Frame *frame, Server server)
 {
-    return prepare_task(frame, server.server_fd, server.client_fd);
+    Task *task = get_free_task(); // Get a free Task prototype
+    if (task == NULL) {
+        printf("No free tasks available\n");
+        return -1;
+    }
+    task->init(task, frame, server.server_fd, server.client_fd);
+    return task->task_id;
 }
 
 int msg_close_task(Frame *frame)
@@ -28,12 +34,12 @@ int msg_data_chunk(Frame *frame)
 {
     printf("[Server] Handle incoming data chunk\n");
     Task *task = get_task_by_id(frame->payload[0]); // Get the task ID from the first byte of the payload to identify which task this data chunk belongs to
-    printf("[Server] Fetched Task with id %i\n", task->task_id);
     if (task == NULL)
     {
         printf("Invalid task ID in data chunk: %d\n", frame->payload[0]);
         return -1; // Invalid task ID
     }
+    printf("[Server] Fetched Task with id %i\n", task->task_id);
 
     // Check if the DATA_CHUNK has an empty Data_payload (task_id and data_id are still there, so 2 means empty)
     // if yes, then that means the end of a DATA_CHUNK Stream and the intention of starting the Task
@@ -54,8 +60,14 @@ int msg_data_chunk(Frame *frame)
     }
     task->input_data = tmp;
 
-    memcpy(&(task->input_data[task->input_data_len]), &frame->payload[2], frame->header.payload_len - 1); // Copy the new chunk into the input data buffer
-    task->input_data_len += frame->header.payload_len - 1;                                                // Update the input data length
+    // Copy the new chunk into the input data buffer
+    uint8_t *buf = (uint8_t *)task->input_data;
+    memcpy(
+        &(buf[task->input_data_len]),
+        &frame->payload[2],
+        frame->header.payload_len - 1);
+
+    task->input_data_len += frame->header.payload_len - 1; // Update the input data length
     return task->task_id;
 }
 

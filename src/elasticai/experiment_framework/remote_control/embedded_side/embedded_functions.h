@@ -1,3 +1,6 @@
+#ifndef EMB_FUNC_H
+#define EMB_FUNC_H
+
 #include <stdint.h>
 
 typedef struct
@@ -9,7 +12,9 @@ typedef struct
 
 typedef ReturnValue (*Func)(void *);
 
-ReturnValue execute_function(int function_id, void *arg);
+Func get_embedded_function_pointer(int function_id);
 
 ReturnValue send_mirror_reply(void *arg);
 ReturnValue func1(void *arg);
+
+#endif

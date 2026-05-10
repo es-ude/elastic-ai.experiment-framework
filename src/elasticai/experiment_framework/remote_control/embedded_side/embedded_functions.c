@@ -10,16 +10,14 @@ Func function_table[] = {
     func1,
 };
 
-ReturnValue execute_function(int function_id, void *arg)
+Func get_embedded_function_pointer(int function_id)
 {
     if (function_id < 0 || function_id >= sizeof(function_table) / sizeof(Func))
     {
         printf("Invalid function ID: %d\n", function_id);
-        return (ReturnValue){0};
+        return NULL;
     }
-
-    Func func = function_table[function_id];
-    return func(arg); // Call the function
+    return function_table[function_id];
 }
 
 ReturnValue send_mirror_reply(void *arg)
