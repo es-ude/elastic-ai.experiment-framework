@@ -18,7 +18,7 @@ Frame read_frame(int fd)
     Frame frame = {.header = {.start_byte = header_buffer[0],
                               .message_type = header_buffer[1],
                               .flags = header_buffer[2],
-                              .msg_id = header_buffer[3],
+                              .transaction_id = header_buffer[3],
                               .payload_len = header_buffer[4]},
                    .payload = NULL};
 
