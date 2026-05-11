@@ -2,6 +2,7 @@
 #define EMB_FUNC_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef struct
 {
@@ -12,7 +13,16 @@ typedef struct
 
 typedef ReturnValue (*Func)(void *);
 
-Func get_embedded_function_pointer(int function_id);
+typedef struct
+{
+    bool infinite_arguments;
+    bool infinite_return;
+    uint16_t argument_bytes_expected;
+    uint16_t amount_returns;
+    Func fnc_pointer;
+} FuncMetadata;
+
+FuncMetadata *get_embedded_function(int function_id);
 
 ReturnValue send_mirror_reply(void *arg);
 ReturnValue func1(void *arg);

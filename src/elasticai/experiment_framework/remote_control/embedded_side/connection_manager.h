@@ -3,6 +3,7 @@
 
 #include <unistd.h>
 #include <stdint.h>
+#include "frame.h"
 
 typedef struct
 {
