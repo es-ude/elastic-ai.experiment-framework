@@ -1,8 +1,8 @@
 from typing import Self
 
 
-from elasticai.experiment_framework.remote_control_v2.commands import Command
-from elasticai.experiment_framework.remote_control_v2.message import Message
+from elasticai.experiment_framework.remote_control.commands import Command
+from elasticai.experiment_framework.remote_control.message import Message
 
 
 

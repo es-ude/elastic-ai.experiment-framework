@@ -1,4 +1,4 @@
-from elasticai.experiment_framework.remote_control_v2.constants import HEADER_SIZE
+from elasticai.experiment_framework.remote_control.constants import HEADER_SIZE
 
 from .header import Header
 from .commands import Command

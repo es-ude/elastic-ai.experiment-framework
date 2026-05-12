@@ -3,11 +3,12 @@ import logging
 import socket
 import threading
 import sys
-from elasticai.experiment_framework.remote_control_v2.commands import Command
-from elasticai.experiment_framework.remote_control_v2.constants import HEADER_SIZE, NUM_BYTES_FOR_ID
-from elasticai.experiment_framework.remote_control_v2.header import Header
-from elasticai.experiment_framework.remote_control_v2.message import Message
-from elasticai.experiment_framework.remote_control_v2.basic_usage import main as run_client
+from elasticai.experiment_framework.remote_control.commands import Command
+from elasticai.experiment_framework.remote_control.constants import HEADER_SIZE, NUM_BYTES_FOR_ID
+from elasticai.experiment_framework.remote_control.flags import Flags
+from elasticai.experiment_framework.remote_control.header import Header
+from elasticai.experiment_framework.remote_control.message import Message
+from elasticai.experiment_framework.remote_control.basic_usage import main as run_client
 
 
 def run_server(host: str, port: int, ready: threading.Event) -> None:
@@ -23,7 +24,7 @@ def run_server(host: str, port: int, ready: threading.Event) -> None:
         msg = _read_message(conn)
         print(f"[server] rx OPEN_TASK tid={msg.header.transaction_id}")
 
-        conn.sendall(Message(Command.ACK, b"",  transaction_id=msg.header.transaction_id).to_bytes())
+        conn.sendall(Message(Command.ACK, b"", transaction_id=msg.header.transaction_id).to_bytes())
         print(f"[server] tx ACK tid={msg.header.transaction_id}")
 
         chunk = _read_message(conn)
@@ -31,7 +32,7 @@ def run_server(host: str, port: int, ready: threading.Event) -> None:
         print(f"[server] rx DATA_CHUNK data={data}")
 
         reply_payload = data
-        conn.sendall(Message(Command.DATA_CHUNK, reply_payload, transaction_id=chunk.header.transaction_id).to_bytes())
+        conn.sendall(Message(Command.DATA_CHUNK, reply_payload,flags=Flags(is_last=True).to_byte() , transaction_id=chunk.header.transaction_id).to_bytes())
         print(f"[server] tx DATA_CHUNK echo={data}")
 
         conn.sendall(Message(Command.RETURN, b"",  transaction_id=chunk.header.transaction_id).to_bytes())
@@ -64,8 +65,7 @@ def main():
     
     logging.basicConfig(
     level=logging.DEBUG,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",)
      
     mode = sys.argv[1] if len(sys.argv) > 1 else "demo"
 

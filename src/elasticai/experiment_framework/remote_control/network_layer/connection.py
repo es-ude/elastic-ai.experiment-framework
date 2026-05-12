@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from elasticai.experiment_framework.remote_control_v2.message import Message
+from elasticai.experiment_framework.remote_control.message import Message
 
 from .internal_transport_protocol import InternalTransportProtocolTCP
 from ..constants import TransportType, HEADER_FORMAT, NUM_MAX_RETRIES, RETRY_DELAY_SECONDS, CONNECTION_TIMEOUT_SECONDS

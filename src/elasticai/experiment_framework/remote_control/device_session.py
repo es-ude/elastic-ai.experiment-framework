@@ -4,10 +4,10 @@ import logging
 from dataclasses import dataclass, field
 from typing import Callable, Dict
 
-from elasticai.experiment_framework.remote_control_v2.message import Message
+from elasticai.experiment_framework.remote_control.message import Message
 
 from .commands import Command
-from elasticai.experiment_framework.remote_control_v2.network_layer.connection import Connection
+from elasticai.experiment_framework.remote_control.network_layer.connection import Connection
 
 _logger = logging.getLogger(__name__)
 

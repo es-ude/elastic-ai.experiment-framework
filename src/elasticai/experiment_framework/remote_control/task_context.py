@@ -1,7 +1,6 @@
-# task_context.py
 import asyncio
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Dict
 
 @dataclass
 class TaskContext:

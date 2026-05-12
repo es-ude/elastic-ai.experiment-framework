@@ -2,9 +2,9 @@ import asyncio
 import logging
 from typing import Callable
 
-from elasticai.experiment_framework.remote_control_v2.helpers import format_message
-from elasticai.experiment_framework.remote_control_v2.header import Header
-from elasticai.experiment_framework.remote_control_v2.message import Message
+from elasticai.experiment_framework.remote_control.helpers import format_message
+from elasticai.experiment_framework.remote_control.header import Header
+from elasticai.experiment_framework.remote_control.message import Message
 
 from ..constants import HEADER_SIZE, SYNC_BYTE
 

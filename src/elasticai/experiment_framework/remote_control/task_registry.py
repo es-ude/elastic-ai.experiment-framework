@@ -15,7 +15,6 @@ class TaskRegistry:
             raise KeyError(f"no task defined for func_id={func_id}")
         return self._definitions[func_id]
 
-    # ── decorator API ─────────────────────────────────────────────
 
     def task(self, func_id: int, **kwargs):
         """Decorator — define a task by decorating its on_opened handler."""

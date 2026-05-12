@@ -5,8 +5,8 @@ from operator import ne
 from sys import flags
 from typing import Dict, Optional
 
-from elasticai.experiment_framework.remote_control_v2.message import Message
-from elasticai.experiment_framework.remote_control_v2.message_builder import MessageBuilder
+from elasticai.experiment_framework.remote_control.message import Message
+from elasticai.experiment_framework.remote_control.message_builder import MessageBuilder
 
 from .commands       import Command
 from .flags          import Flags
@@ -59,7 +59,7 @@ class RemoteTaskController:
         return ctx
 
 
-    async def send_chunk(self, ctx: TaskContext, data: bytes) -> None:
+    async def send_chunk(self, ctx: TaskContext, data: bytes, is_last: bool = False) -> None:
         _, definition = self._tasks[ctx.transaction_id]
         need_ack      = definition.need_ack
         data_id       = ctx.next_data_id
@@ -77,17 +77,29 @@ class RemoteTaskController:
                 .set_data_id(data_id)
                 .set_data(data)
                 .set_need_ack(need_ack)
+                .set_is_last(is_last)
                 .build()
         )
-        ctx.next_data_id += 1
         await self._device.connection.send(msg.to_bytes())
         print(f"[send_chunk] sent tid={ctx.transaction_id} data_id={data_id}")
+        
+        if not need_ack:
+            ctx.next_data_id += 1
+            return
+        
 
-        if need_ack:
-            print(f"[send_chunk] waiting for ACK tid={ctx.transaction_id} data_id={data_id}")
+        try:
             await asyncio.wait_for(fut, timeout=definition.timeout)
-            print(f"[send_chunk] ACK received tid={ctx.transaction_id} data_id={data_id}")
+            ctx.next_data_id += 1
+            print(f"[send_chunk] ACK received data_id={data_id}")
+            return
 
+        except TimeoutError:
+            ctx._pending_acks.pop(data_id, None)
+            print(f"[send_chunk] timeout waiting for ACK — attempt")
+            raise TimeoutError(
+                    f"no ACK tid={ctx.transaction_id} data_id={data_id}")
+        
 
     async def _on_message(self, message: Message) -> None:
         try:
@@ -143,9 +155,15 @@ class RemoteTaskController:
                             .build()
                     )
                     await self._device.connection.send(ack.to_bytes())
+                    
+                
 
                 if (on_data_chunk := definition.on_data_chunk_received) is not None:
                     await on_data_chunk(ctx, chunk)
+                    
+                if flags.is_last and (on_is_last := definition.on_is_last) is not None: 
+                    await on_is_last(ctx)
+
                 return
 
             if cmd == Command.RETURN and ctx.state in ("opened", "received_data"):

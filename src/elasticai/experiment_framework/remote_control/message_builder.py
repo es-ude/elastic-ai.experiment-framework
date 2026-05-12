@@ -2,7 +2,7 @@ from collections.abc import Iterator
 from enum import Flag
 from typing import Iterable, Literal
 
-from elasticai.experiment_framework.remote_control_v2.flags import Flags
+from elasticai.experiment_framework.remote_control.flags import Flags
 
 from .commands import Command
 from .message import Message
@@ -18,6 +18,7 @@ class MessageBuilder:
         self.data_id = 0
         self.transaction_id = 0
         self.need_ack = False
+        self.is_last = False
 
     def set_command(self, cmd: Command)      -> "MessageBuilder": self.command        = cmd;  return self
     def set_transaction_id(self, tid: int)   -> "MessageBuilder": self.transaction_id = tid;  return self
@@ -25,6 +26,7 @@ class MessageBuilder:
     def set_data_id(self, did: int)          -> "MessageBuilder": self.data_id        = did;  return self
     def set_data(self, data: bytes)          -> "MessageBuilder": self.data           = data; return self
     def set_need_ack(self, ack: bool)        -> "MessageBuilder": self.need_ack       = ack;  return self
+    def set_is_last(self, is_last: bool)     -> "MessageBuilder": self.is_last       = is_last;  return self
 
  
     def build(self) -> Iterator[Message]:
@@ -55,7 +57,7 @@ class MessageBuilder:
         return Message(
             self.command,
             data,
-            flags= Flags(self.need_ack).to_byte(),
+            flags= Flags(need_ack= self.need_ack, is_last=self.is_last).to_byte(),
             transaction_id=self.transaction_id,
             byte_order=self.byte_order,
         )
