@@ -5,6 +5,12 @@
 
 typedef struct
 {
+    const char *host;
+    int port;
+} ThreadArgs;
+
+typedef struct
+{
     uint8_t fd;
     Frame frame;
 } ReceiveOrder;

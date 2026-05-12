@@ -182,7 +182,7 @@ bool finish(Task *self)
 // Retrieve a pointer to a task by its ID. Returns NULL if the task ID is invalid or if the task is idle
 Task *get_task_by_id(uint8_t task_id)
 {
-    if (task_id >= MAX_TASKS || tasks[task_id].status == TASK_STATUS_IDLE)
+    if (task_id >= MAX_TASKS)
     {
         return NULL; // Invalid task ID or task is not running
     }

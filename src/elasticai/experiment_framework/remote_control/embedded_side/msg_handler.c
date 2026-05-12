@@ -10,7 +10,7 @@
 
 int msg_open_task(Frame *frame, Server server)
 {
-    Task *task = get_free_task(); // Get a free Task prototype
+    Task *task = get_task_by_id(frame->header.transaction_id);
     if (task == NULL)
     {
         printf("No free tasks available\n");

@@ -1,13 +1,13 @@
 # remote_control_protocol.py
-import asyncio
 import logging
-from typing import Dict, List, Optional
+from typing import List, Optional
 
-from .network_layer import Connection
+from ..network_layer import Connection
+from .constants import MAX_CONNECTED_DEVICES, TransportType
 from .device_session import DeviceSession
-from .constants import TransportType, MAX_CONNECTED_DEVICES
 
 _logger = logging.getLogger(__name__)
+
 
 class RemoteControlProtocol:
     """Device registry — connect, disconnect, find sessions."""
@@ -16,7 +16,6 @@ class RemoteControlProtocol:
         self._sessions: List[DeviceSession] = []
         self._max_devices = max_devices
         self._next_id = 0
-
 
     async def connect_tcp(self, host: str, port: int) -> DeviceSession:
         self._check_capacity()
@@ -41,7 +40,6 @@ class RemoteControlProtocol:
         self._sessions.remove(session)
         _logger.info("device disconnected: %s", session.device_info)
 
-
     def find_by_info(self, device_info: dict) -> DeviceSession:
         result = [s for s in self._sessions if s.device_info == device_info]
         if not result:
@@ -50,7 +48,6 @@ class RemoteControlProtocol:
 
     def find_by_id(self, session_id: int) -> Optional[DeviceSession]:
         return next((s for s in self._sessions if s.id == session_id), None)
-
 
     def _check_capacity(self) -> None:
         if len(self._sessions) >= self._max_devices:

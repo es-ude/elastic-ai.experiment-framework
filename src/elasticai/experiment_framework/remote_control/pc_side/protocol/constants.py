@@ -1,5 +1,6 @@
-from enum import Enum
 import struct
+from enum import Enum
+
 SYNC_BYTE = 0xAA
 HEADER_FORMAT = "<BBBBH"
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
@@ -13,12 +14,13 @@ NUM_BYTES_FOR_ID = 1
 
 MAX_MSG_ID = 255
 
+
 class TransportType(Enum):
     TCP = 0x01
     UDP = 0x02
     SERIAL = 0x03
-    
-    
+
+
 MAX_CONNECTED_DEVICES = 4
 
 NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD = 0

@@ -1,34 +1,36 @@
 # header.py
 import struct
 from dataclasses import dataclass
+
 from .commands import Command
-from .flags    import Flags
-from .constants import SYNC_BYTE, HEADER_FORMAT, HEADER_SIZE, MAX_TRANSACTIONS
+from .constants import HEADER_FORMAT, HEADER_SIZE, MAX_TRANSACTIONS, SYNC_BYTE
+from .flags import Flags
+
 
 @dataclass
 class Header:
-    command:        Command
-    flags:          Flags
+    command: Command
+    flags: Flags
     transaction_id: int
-    payload_len:    int
+    payload_len: int
 
     @property
     def total_size(self) -> int:
         """Full message size including payload"""
         return HEADER_SIZE + self.payload_len
-    
+
     @property
     def get_command(self):
         return self.command
-    
+
     @property
     def get_flages(self):
         return self.flags
-    
+
     @property
     def get_transaction_id(self):
         return self.transaction_id
-    
+
     @property
     def get_payload_len(self):
         return self.payload_len
@@ -64,10 +66,10 @@ class Header:
             HEADER_FORMAT, data
         )
         return cls(
-            command        = Command.from_bytes(bytes([cmd])),
-            flags          = Flags.from_byte(flags),
-            transaction_id = transaction_id,
-            payload_len    = payload_len,
+            command=Command.from_bytes(bytes([cmd])),
+            flags=Flags.from_byte(flags),
+            transaction_id=transaction_id,
+            payload_len=payload_len,
         )
 
     def __repr__(self) -> str:

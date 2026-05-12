@@ -2,11 +2,15 @@ import asyncio
 import logging
 from typing import Callable
 
-from elasticai.experiment_framework.remote_control.helpers import format_message
-from elasticai.experiment_framework.remote_control.header import Header
-from elasticai.experiment_framework.remote_control.message import Message
+from elasticai.experiment_framework.remote_control.pc_side.protocol.header import Header
+from elasticai.experiment_framework.remote_control.pc_side.protocol.helpers import (
+    format_message,
+)
+from elasticai.experiment_framework.remote_control.pc_side.protocol.message import (
+    Message,
+)
 
-from ..constants import HEADER_SIZE, SYNC_BYTE
+from ..protocol.constants import HEADER_SIZE, SYNC_BYTE
 
 _logger = logging.getLogger(__name__)
 
@@ -41,7 +45,6 @@ class InternalTransportProtocolTCP(asyncio.Protocol):
 
     def _parse(self) -> None:
         while len(self._buffer) - self._offset >= HEADER_SIZE:
-
             if self._buffer[self._offset] != SYNC_BYTE:
                 _logger.warning(
                     "invalid sync byte at offset=%d value=%s",
@@ -52,7 +55,7 @@ class InternalTransportProtocolTCP(asyncio.Protocol):
                 continue
 
             header_bytes = bytes(
-                self._buffer[self._offset:self._offset + HEADER_SIZE]
+                self._buffer[self._offset : self._offset + HEADER_SIZE]
             )
 
             try:
@@ -79,9 +82,7 @@ class InternalTransportProtocolTCP(asyncio.Protocol):
                 break
 
             payload = bytes(
-                self._buffer[
-                    self._offset + HEADER_SIZE:self._offset + total_len
-                ]
+                self._buffer[self._offset + HEADER_SIZE : self._offset + total_len]
             )
 
             self._offset += total_len
@@ -105,7 +106,7 @@ class InternalTransportProtocolTCP(asyncio.Protocol):
                 self._offset,
             )
 
-        del self._buffer[:self._offset]
+        del self._buffer[: self._offset]
         self._offset = 0
 
     def write(self, data: bytes) -> None:

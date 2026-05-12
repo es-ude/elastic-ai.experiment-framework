@@ -13,7 +13,7 @@
 // Start a TCP server
 Server start_server(int port)
 {
-    printf("[Server] Starting server...\n");
+    printf("[Server] Starting server on port %i.\n", port);
     int server_fd, client_fd;
     struct sockaddr_in addr = {0};
     char buffer[1024] = {0};
@@ -30,7 +30,9 @@ Server start_server(int port)
         result = bind(server_fd, (struct sockaddr *)&addr, sizeof(addr));
         if (result < 0)
         {
-            perror("[Server] bind failed. retrying in 5 second");
+
+            printf("[Server] bind failed on %i. retrying in 5 second\n", port);
+            fflush(stdout);
             sleep(5);
             continue;
         }

@@ -34,7 +34,16 @@ Frame read_frame(int fd)
 // Handles incoming connections
 void *receiving_thread(void *arg)
 {
-    Server server = start_server(8080);
+
+    
+
+    ThreadArgs *args = (ThreadArgs *)arg;
+
+    printf("host = %s\n", args->host);
+    printf("port = %d\n", args->port);
+
+
+    Server server = start_server(args->port);
     bool connected = false;
 
     Frame *framebuffer = malloc(sizeof(Frame));

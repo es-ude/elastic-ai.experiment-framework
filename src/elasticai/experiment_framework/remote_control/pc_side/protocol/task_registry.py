@@ -1,9 +1,10 @@
 # task_registry.py
-from typing import Dict, Callable
+from typing import Callable, Dict
+
 from .task_definition import TaskDefinition
 
-class TaskRegistry:
 
+class TaskRegistry:
     def __init__(self) -> None:
         self._definitions: Dict[int, TaskDefinition] = {}
 
@@ -15,10 +16,11 @@ class TaskRegistry:
             raise KeyError(f"no task defined for func_id={func_id}")
         return self._definitions[func_id]
 
-
     def task(self, func_id: int, **kwargs):
         """Decorator — define a task by decorating its on_opened handler."""
+
         def decorator(fn: Callable):
             self.register(TaskDefinition(func_id=func_id, on_opened=fn, **kwargs))
             return fn
+
         return decorator

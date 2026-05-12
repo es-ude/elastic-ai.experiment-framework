@@ -1,14 +1,14 @@
 from enum import IntEnum
 
+
 class Command(IntEnum):
-    OPEN_TASK  = 0x01
+    OPEN_TASK = 0x01
     CLOSE_TASK = 0x02
-    RETURN     = 0x03
+    RETURN = 0x03
     DATA_CHUNK = 0x04
-    ACK        = 0x05
-    NACK       = 0x06
+    ACK = 0x05
+    NACK = 0x06
     HANDSHAKE = 0x07
-    
 
     @classmethod
     def from_bytes(cls, data: bytes) -> "Command":
