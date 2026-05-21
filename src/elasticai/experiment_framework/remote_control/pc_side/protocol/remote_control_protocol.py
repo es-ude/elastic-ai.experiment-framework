@@ -1,4 +1,3 @@
-# remote_control_protocol.py
 import logging
 from typing import List, Optional
 
@@ -24,21 +23,26 @@ class RemoteControlProtocol:
         self._check_not_duplicate(device_info)
 
         con = Connection(transportType=TransportType.TCP, host=host, port=port)
-        await con.connect()
 
-        session = DeviceSession(self._next_id, device_info, con)
+        try:
+            await con.connect()
+            session = DeviceSession(self._next_id, device_info, con)
+        except Exception as e:
+            await con.close()
+            raise e
+
         self._sessions.append(session)
         self._next_id += 1
 
-        session.start()
+        await session.start()
 
-        _logger.info("device connected: %s", device_info)
+        _logger.debug("[CLIENT] device connected: %s", device_info)
         return session
 
     async def disconnect(self, session: DeviceSession) -> None:
         await session.stop()
         self._sessions.remove(session)
-        _logger.info("device disconnected: %s", session.device_info)
+        _logger.debug("[CLIENT] device disconnected: %s", session.device_info)
 
     def find_by_info(self, device_info: dict) -> DeviceSession:
         result = [s for s in self._sessions if s.device_info == device_info]

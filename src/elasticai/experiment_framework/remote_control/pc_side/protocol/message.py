@@ -33,7 +33,7 @@ class Message:
 
         if len(payload) != header.payload_len:
             print(f" Message Header invalid, Hearder:{header}, Payload: {payload}")
-            raise Exception(f" Message Header invalid, Hearder:{header}")
+            raise ValueError(f" Message Header invalid, Hearder:{header}")
 
         return cls(
             command=header.command,
@@ -45,7 +45,7 @@ class Message:
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Message):
-            return NotImplemented
+         raise ValueError()
         return self.header == other.header and self.payload == other.payload
 
     def __repr__(self) -> str:

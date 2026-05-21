@@ -1,188 +1,259 @@
 import asyncio
 import logging
-from typing import Dict
+from typing import Awaitable, Callable, Dict
 
 from .commands import Command
 from .constants import MAX_TRANSACTIONS, NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD
 from .device_session import DeviceSession
 from .message import Message
 from .message_builder import MessageBuilder
-from .task_context import TaskContext
+from .task_context import TaskContext, TaskState
 from .task_definition import TaskDefinition
 from .task_registry import TaskRegistry
+
+_logger = logging.getLogger(__name__)
 
 
 class RemoteTaskController:
     def __init__(self, device: DeviceSession, registry: TaskRegistry) -> None:
         self._device = device
         self._registry = registry
-        self._logger = logging.getLogger(__name__)
 
         self._tasks: Dict[int, tuple[TaskContext, TaskDefinition]] = {}
 
     async def open_task(self, func_id: int) -> TaskContext:
         definition = self._registry.get(func_id)
+
         tid = self._next_transaction_id()
+
         ctx = TaskContext(transaction_id=tid)
-        need_ack = definition.need_ack
+        ctx.state = TaskState.OPENING
 
         self._tasks[tid] = (ctx, definition)
-        self._device.expect(tid, lambda msg: asyncio.create_task(self._on_message(msg)))
 
-        print(f"[open_task] func_id={func_id} tid={tid} need_ack={need_ack}")
+        self._device.expect(tid, self._on_message)
 
-        msg = next(
-            MessageBuilder()
-            .set_command(Command.OPEN_TASK)
-            .set_transaction_id(tid)
-            .set_func_id(func_id)
-            .set_need_ack(need_ack)
-            .build()
+        await self._send_message(
+            command=Command.OPEN_TASK,
+            transaction_id=tid,
+            func_id=func_id,
+            need_ack=definition.need_ack,
         )
-        await self._device.connection.send(msg.to_bytes())
 
-        if need_ack:
-            print(f"[open_task] waiting for opened_event tid={tid}")
-            await asyncio.wait_for(ctx.opened_event.wait(), timeout=definition.timeout)
-            print(f"[open_task] task opened tid={tid}")
+        if definition.need_ack:
+            await asyncio.wait_for(
+                ctx.opened_event.wait(),
+                timeout=definition.timeout,
+            )
 
-        if (on_opened := definition.on_opened) is not None:
+        if definition.on_opened is not None:
 
             async def send(data: bytes) -> None:
                 await self.send_chunk(ctx, data, is_last=True)
 
-            await on_opened(ctx, send)
+            await definition.on_opened(ctx, send)
+
         return ctx
 
     async def send_chunk(
-        self, ctx: TaskContext, data: bytes, is_last: bool = False
+        self,
+        ctx: TaskContext,
+        data: bytes,
+        is_last: bool = False,
     ) -> None:
         _, definition = self._tasks[ctx.transaction_id]
-        need_ack = definition.need_ack
         data_id = ctx.next_data_id
 
-        print(
-            f"[send_chunk] tid={ctx.transaction_id} data_id={data_id} len={len(data)} need_ack={need_ack}"
-        )
-
-        if need_ack:
+        if definition.need_ack:
             fut = asyncio.get_running_loop().create_future()
             ctx._pending_acks[data_id] = fut
 
-        msg = next(
+        await self._send_message(
+            command=Command.DATA_CHUNK,
+            transaction_id=ctx.transaction_id,
+            data_id=data_id,
+            data=data,
+            need_ack=definition.need_ack,
+            is_last=is_last,
+        )
+
+        if not definition.need_ack:
+            ctx.next_data_id += 1
+            return
+
+        try:
+            await asyncio.wait_for(
+                fut,
+                timeout=definition.timeout,
+            )
+
+            ctx.next_data_id += 1
+
+        except TimeoutError:
+            ctx._pending_acks.pop(data_id, None)
+
+            raise TimeoutError(
+                f"[Client]no ACK tid={ctx.transaction_id} data_id={data_id}"
+            )
+
+    async def _on_message(self, message: Message) -> None:
+        try:
+            tid = message.header.transaction_id
+
+            entry = self._tasks.get(tid)
+
+            if entry is None:
+                _logger.warning("[CLIENT]unknown tid=%d", tid)
+                return
+
+            ctx, definition = entry
+
+            handlers: dict[
+                Command,
+                Callable[
+                    [TaskContext, TaskDefinition, Message],
+                    Awaitable[None],
+                ],
+            ] = {
+                Command.ACK: self._handle_ack,
+                Command.DATA_CHUNK: self._handle_chunk,
+                Command.RETURN: self._handle_return,
+            }
+
+            handler = handlers.get(message.header.command)
+
+            if handler is None:
+                _logger.warning(
+                    "[CLIENT]  unsupported command=%s",
+                    message.header.command,
+                )
+                return
+
+            await handler(ctx, definition, message)
+
+        except Exception as e:
+            _logger.error("[CLIENT]error handling message: %s", e)
+            raise
+
+    async def _handle_ack(
+        self,
+        ctx: TaskContext,
+        definition: TaskDefinition,
+        message: Message,
+    ) -> None:
+        payload = message.payload
+
+        if ctx.state == TaskState.OPENING:
+            ctx.state = TaskState.OPENED
+            ctx.opened_event.set()
+            return
+
+        self._validate_payload_has_data_id(payload)
+        data_id = payload[NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD]
+
+        fut = ctx._pending_acks.pop(data_id, None)
+
+        if fut is None:
+            _logger.warning(
+                "[CLIENT]  unexpected ACK tid=%d data_id=%d",
+                ctx.transaction_id,
+                data_id,
+            )
+            return
+
+        if not fut.done():
+            fut.set_result(True)
+
+    async def _handle_chunk(
+        self,
+        ctx: TaskContext,
+        definition: TaskDefinition,
+        message: Message,
+    ) -> None:
+        payload = message.payload
+
+        self._validate_payload_has_data_id(payload)
+
+        flags = message.header.flags
+
+        data_id = payload[NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD]
+
+        chunk = payload[NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD + 1 :]
+
+        ctx.received_data.extend(chunk)
+
+        ctx.state = TaskState.RECEIVED_DATA
+
+        if flags.need_ack:
+            await self._send_message(
+                command=Command.ACK,
+                transaction_id=ctx.transaction_id,
+                data_id=data_id,
+            )
+
+        if definition.on_data_chunk_received is not None:
+            await definition.on_data_chunk_received(ctx, chunk)
+
+        if flags.is_last and definition.on_is_last is not None:
+            await definition.on_is_last(ctx)
+
+    async def _handle_return(
+        self,
+        ctx: TaskContext,
+        definition: TaskDefinition,
+        message: Message,
+    ) -> None:
+        if ctx.state not in (
+            TaskState.OPENED,
+            TaskState.OPENING,
+            TaskState.RECEIVED_DATA,
+        ):
+            return
+
+        ctx.state = TaskState.FINISHED
+
+        ctx.finished_event.set()
+
+        self._tasks.pop(ctx.transaction_id, None)
+
+        if definition.on_finished is not None:
+            await definition.on_finished(ctx)
+
+    async def _send_message(
+        self,
+        command: Command,
+        transaction_id: int,
+        *,
+        func_id: int = 0,
+        data_id: int = 0,
+        data: bytes = b"",
+        need_ack: bool = False,
+        is_last: bool = False,
+    ) -> None:
+        builder = (
             MessageBuilder()
-            .set_command(Command.DATA_CHUNK)
-            .set_transaction_id(ctx.transaction_id)
+            .set_command(command)
+            .set_transaction_id(transaction_id)
+            .set_func_id(func_id)
             .set_data_id(data_id)
             .set_data(data)
             .set_need_ack(need_ack)
             .set_is_last(is_last)
-            .build()
         )
-        await self._device.connection.send(msg.to_bytes())
-        print(f"[send_chunk] sent tid={ctx.transaction_id} data_id={data_id}")
 
-        if not need_ack:
-            ctx.next_data_id += 1
-            return
+        message = builder.build()
 
-        try:
-            await asyncio.wait_for(fut, timeout=definition.timeout)
-            ctx.next_data_id += 1
-            print(f"[send_chunk] ACK received data_id={data_id}")
-            return
+        await self._device.connection.send(message.to_bytes())
 
-        except TimeoutError:
-            ctx._pending_acks.pop(data_id, None)
-            print("[send_chunk] timeout waiting for ACK — attempt")
-            raise TimeoutError(f"no ACK tid={ctx.transaction_id} data_id={data_id}")
-
-    async def _on_message(self, message: Message) -> None:
-        try:
-            print(f"[_on_message] message= {message}")
-
-            flags = message.header.flags
-            tid = message.header.transaction_id
-            payload = message.payload
-            cmd = message.header.command
-
-            print(f"[_on_message] cmd={cmd} tid={tid}")
-
-            entry = self._tasks.get(tid)
-            if entry is None:
-                print(f"[_on_message] unknown tid={tid} — dropping")
-                self._logger.warning("unknown tid=%d", tid)
-                return
-
-            ctx, definition = entry
-            if cmd == Command.ACK:
-                if ctx.state == "opening":
-                    print(f"[_on_message] RETURN → task opened tid={tid}")
-                    ctx.state = "opened"
-                    ctx.opened_event.set()
-                    return
-
-                data_id = payload[NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD]
-                print(f"[_on_message] ACK tid={tid} data_id={data_id}")
-                fut = ctx._pending_acks.pop(data_id, None)
-                if fut and not fut.done():
-                    fut.set_result(True)
-                    print(
-                        f"[_on_message] ACK resolved future tid={tid} data_id={data_id}"
-                    )
-                else:
-                    print(f"[_on_message] unexpected ACK tid={tid} data_id={data_id}")
-                    self._logger.warning(
-                        "unexpected ACK tid=%d data_id=%d", tid, data_id
-                    )
-                return
-
-            if cmd == Command.DATA_CHUNK:
-                data_id = payload[NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD]
-                chunk = payload[NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD + 1 :]
-                print(
-                    f"[_on_message] DATA_CHUNK tid={tid} data_id={data_id} len={len(chunk)}: {chunk.hex()}"
-                )
-
-                ctx.received_data.extend(chunk)
-                ctx.state = "received_data"
-
-                if flags.need_ack:
-                    print(f"[_on_message] sending ACK tid={tid} data_id={data_id}")
-                    ack = next(
-                        MessageBuilder()
-                        .set_command(Command.ACK)
-                        .set_transaction_id(tid)
-                        .set_data_id(data_id)
-                        .build()
-                    )
-                    await self._device.connection.send(ack.to_bytes())
-
-                if (on_data_chunk := definition.on_data_chunk_received) is not None:
-                    await on_data_chunk(ctx, chunk)
-
-                if flags.is_last and (on_is_last := definition.on_is_last) is not None:
-                    await on_is_last(ctx)
-
-                return
-
-            if cmd == Command.RETURN and ctx.state in ("opened", "received_data"):
-                print(f"[_on_message] RETURN → task finished tid={tid}")
-                ctx.state = "finished"
-                ctx.finished_event.set()
-                self._tasks.pop(tid)
-
-                if (on_finished := definition.on_finished) is not None:
-                    await on_finished(ctx)
-
-        except Exception as e:
-            print(f"[_on_message] ERROR: {e}")
-            self._logger.error("error handling message: %s", e)
-            raise
+    def _validate_payload_has_data_id(self, payload: bytes) -> None:
+        if len(payload) <= NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD:
+            raise ValueError("payload too short for data_id")
 
     def _next_transaction_id(self) -> int:
         used = set(self._tasks.keys())
+
         for tid in range(1, MAX_TRANSACTIONS):
             if tid not in used:
                 return tid
-        raise RuntimeError(f"all {MAX_TRANSACTIONS} transaction IDs in use")
+
+        raise RuntimeError(f"[Client]all {MAX_TRANSACTIONS} transaction IDs in use")

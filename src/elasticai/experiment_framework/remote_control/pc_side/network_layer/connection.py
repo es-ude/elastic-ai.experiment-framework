@@ -45,11 +45,11 @@ class Connection:
                 await self._create_connection(loop)
                 self._connected = True
                 print(f"connected via {self._transport_type}")
-                _logger.info(f"connected via {self._transport_type}")
+                _logger.debug(f"[CLIENT] connected via {self._transport_type}")
                 return
             except Exception as e:
                 print(f"attempt {attempt + 1} failed: {e}")
-                _logger.error(f"attempt {attempt + 1} failed: {e}")
+                _logger.error(f"[CLIENT] attempt {attempt + 1} failed: {e}")
                 await asyncio.sleep(RETRY_DELAY_SECONDS)
 
         raise ConnectionError("could not connect after retries")

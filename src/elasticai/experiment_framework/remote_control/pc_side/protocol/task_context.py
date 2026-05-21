@@ -1,13 +1,20 @@
 import asyncio
 from dataclasses import dataclass, field
+from enum import Enum, auto
 from typing import Dict
 
+
+class TaskState(Enum):
+    OPENING = auto()
+    OPENED = auto()
+    RECEIVED_DATA = auto()
+    FINISHED = auto()
 
 @dataclass
 class TaskContext:
     transaction_id: int
 
-    state: str = "opening"
+    state: TaskState = TaskState.OPENING
     next_data_id: int = 0
     received_data: bytearray = field(default_factory=bytearray)
 

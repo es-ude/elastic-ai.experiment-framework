@@ -1,10 +1,13 @@
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Callable, Dict
+from typing import Awaitable, Callable, Dict
 
 from elasticai.experiment_framework.remote_control.pc_side.network_layer.connection import (
     Connection,
+)
+from elasticai.experiment_framework.remote_control.pc_side.protocol.exceptions import (
+    UnexpectedMessageError,
 )
 from elasticai.experiment_framework.remote_control.pc_side.protocol.message import (
     Message,
@@ -16,7 +19,7 @@ _logger = logging.getLogger(__name__)
 @dataclass
 class MessageExpectation:
     transaction_id: int
-    callback: Callable[[Message], None]
+    callback: Callable[[Message], Awaitable[None]]
 
 
 class DeviceSession:
@@ -29,12 +32,15 @@ class DeviceSession:
         self.device_info: dict = device_info
         self.connection: Connection = connection
         self._expectations: Dict[int, MessageExpectation] = {}
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task
+        self._started = asyncio.Event()
 
-    def start(self) -> None:
+    async def start(self):
         self._task = asyncio.create_task(self._receive_loop())
+        await self._started.wait()
 
     async def stop(self) -> None:
+        self._running = False
         if self._task:
             self._task.cancel()
             await self.connection.close()
@@ -46,24 +52,28 @@ class DeviceSession:
         )
 
     async def _receive_loop(self) -> None:
-        while True:
+        self._running = True
+        self._started.set()
+
+        while self._running:
             try:
                 message = await self.connection.receive(timeout=None)
-                self._dispatch(message)
+                await self._dispatch(message)
 
             except TimeoutError:
-                _logger.warning("device %d timed out", self.id)
-                break
+                _logger.warning("[CLIENT]device %d timed out", self.id)
+                self._running = False
 
             except Exception as e:
-                _logger.error("device %d receive error: %s", self.id, e)
-                break
+                _logger.error("[CLIENT]device %d receive error: %s", self.id, e)
+                self._running = False
 
-    def _dispatch(self, message: Message) -> None:
-        tid = message.header.get_transaction_id
+    async def _dispatch(self, message: Message) -> None:
+        tid = message.header.transaction_id
         exp = self._expectations.get(tid, None)
 
         if exp is not None:
-            exp.callback(message)
+            await exp.callback(message)
         else:
-            _logger.warning("device %d unhandled message tid=%d", self.id, tid)
+            _logger.warning("[CLIENT]device %d unhandled message tid=%d", self.id, tid)
+            raise UnexpectedMessageError

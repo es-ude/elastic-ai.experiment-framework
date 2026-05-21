@@ -1,4 +1,3 @@
-from collections.abc import Iterator
 from typing import Literal
 
 from .commands import Command
@@ -11,7 +10,6 @@ class MessageBuilder:
     def __init__(self) -> None:
         self.data = b""
         self.byte_order: Literal["big", "little"] = "little"
-        self._NUM_BYTES_FOR_LENGTH = NUM_BYTES_FOR_ID
         self.command: Command = Command.NACK
         self.func_id = 0
         self.data_id = 0
@@ -47,18 +45,20 @@ class MessageBuilder:
         self.is_last = is_last
         return self
 
-    def build(self) -> Iterator[Message]:
+    def build(self) -> Message:
         match self.command:
             case Command.NACK | Command.ACK:
-                yield self._new_msg(self._get_number_in_bytes(self.data_id))
+                return self._new_msg(self._get_number_in_bytes(self.data_id))
             case Command.OPEN_TASK:
-                yield self._new_msg(self._get_number_in_bytes(self.func_id))
+                return self._new_msg(self._get_number_in_bytes(self.func_id))
             case Command.CLOSE_TASK:
-                yield self._new_msg(b"")
+                return self._new_msg(b"")
             case Command.DATA_CHUNK:
-                yield self._new_msg(self._get_number_in_bytes(self.data_id) + self.data)
+                return self._new_msg(
+                    self._get_number_in_bytes(self.data_id) + self.data
+                )
             case Command.RETURN:
-                yield self._new_msg(self.data)
+                return self._new_msg(self.data)
             case _:
                 raise NotImplementedError(
                     f"Command {self.command} not implemented in MessageBuilder"
@@ -66,7 +66,7 @@ class MessageBuilder:
 
     def _get_number_in_bytes(self, number: int) -> bytes:
         return number.to_bytes(
-            length=self._NUM_BYTES_FOR_LENGTH, byteorder=self.byte_order, signed=False
+            length=NUM_BYTES_FOR_ID, byteorder=self.byte_order, signed=False
         )
 
     def _new_msg(self, data: bytes) -> Message:

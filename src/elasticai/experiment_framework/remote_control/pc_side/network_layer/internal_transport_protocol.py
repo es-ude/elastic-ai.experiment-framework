@@ -27,19 +27,19 @@ class InternalTransportProtocolTCP(asyncio.Protocol):
         self._offset = 0
         self._queue = queue
         self._transport: asyncio.Transport
-        _logger.debug("protocol initialized")
+        _logger.debug("[CLIENT] protocol initialized")
 
     def connection_made(self, transport: asyncio.Transport) -> None:
         self._transport = transport
         peer = transport.get_extra_info("peername")
-        _logger.info("connection made with %s", peer)
+        _logger.debug("[CLIENT] connection made with %s", peer)
 
     def connection_lost(self, exc: Exception | None) -> None:
-        _logger.warning("connection lost: %s", exc)
+        _logger.warning("[CLIENT]connection lost: %s", exc)
         self.on_lost(exc)
 
     def data_received(self, data: bytes) -> None:
-        _logger.debug("received %d %s bytes", len(data), data)
+        _logger.debug("[CLIENT] received %d %s bytes", len(data), data)
         self._buffer.extend(data)
         self._parse()
 
@@ -47,7 +47,7 @@ class InternalTransportProtocolTCP(asyncio.Protocol):
         while len(self._buffer) - self._offset >= HEADER_SIZE:
             if self._buffer[self._offset] != SYNC_BYTE:
                 _logger.warning(
-                    "invalid sync byte at offset=%d value=%s",
+                    "[CLIENT]  invalid sync byte at offset=%d value=%s",
                     self._offset,
                     hex(self._buffer[self._offset]),
                 )
@@ -63,7 +63,7 @@ class InternalTransportProtocolTCP(asyncio.Protocol):
 
             except ValueError as e:
                 _logger.warning(
-                    "invalid header at offset=%d: %s",
+                    "[CLIENT]  invalid header at offset=%d: %s",
                     self._offset,
                     e,
                 )
@@ -75,7 +75,7 @@ class InternalTransportProtocolTCP(asyncio.Protocol):
 
             if remaining < total_len:
                 _logger.debug(
-                    "incomplete message (have=%d expected=%d)",
+                    "[CLIENT] incomplete message (have=%d expected=%d)",
                     remaining,
                     total_len,
                 )
@@ -91,18 +91,18 @@ class InternalTransportProtocolTCP(asyncio.Protocol):
                 msg = Message.from_bytes(header_bytes + payload)
 
                 _logger.debug(
-                    "received message: %s",
+                    "[CLIENT] received message: %s",
                     format_message(msg),
                 )
 
                 self._queue.put_nowait(msg)
 
             except Exception:
-                _logger.exception("failed to parse message")
+                _logger.exception("[CLIENT] failed to parse message")
 
         if self._offset > 0:
             _logger.debug(
-                "consumed %d bytes from buffer",
+                "[CLIENT] consumed %d bytes from buffer",
                 self._offset,
             )
 
@@ -112,7 +112,7 @@ class InternalTransportProtocolTCP(asyncio.Protocol):
     def write(self, data: bytes) -> None:
 
         if self._transport.is_closing():
-            _logger.error("attempted write on closing transport")
+            _logger.error("[CLIENT]attempted write on closing transport")
             raise ConnectionError("_transport is closing")
 
         self._transport.write(data)
@@ -121,9 +121,9 @@ class InternalTransportProtocolTCP(asyncio.Protocol):
             msg = Message.from_bytes(data)
 
             _logger.debug(
-                "sent message: %s",
+                "[CLIENT] sent message: %s",
                 format_message(msg),
             )
 
         except Exception:
-            _logger.debug("sent raw bytes len=%d", len(data))
+            _logger.debug("[CLIENT] sent raw bytes len=%d", len(data))

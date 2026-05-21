@@ -21,21 +21,12 @@ A framework to support you in performing experiments with the elastic-ai.Hardwar
   - [x] Vivado remote
   - [x] Cached Synthesis
 
-## Quick Start
+## Testing
 
 ```bash
-$ uvx --from "git+https://github.com/es-ude/elastic-ai.experiment-framework.git" eaixp --help
+$ uv run python -m pytest tests
 ```
-or 
-```bash
-$ uv tool install "git+https://github.com/es-ude/elastic-ai.experiment-framework.git"
-$ uv tool run eaixp --help
-```
-or
-```bash
-$ pip install "git+https://github.com/es-ude/elastic-ai.experiment-framework.git"
-$ eaixp --help
-```
+
 
 
 
