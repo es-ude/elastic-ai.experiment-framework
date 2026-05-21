@@ -1,23 +1,34 @@
 #include "msg_handler.h"
 #include "task_manager.h"
-#include "enums.h"
 #include "frame_builder.h"
-#include "task_manager.h"
+#include "sender.h"
+#include "msg_types.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-int msg_open_task(Frame *frame, Server server)
+void print_payload(uint8_t *payload, uint8_t payload_len)
 {
-    Task *task = get_free_task(); // Get a free Task prototype
+    printf("[Payload] ");
+    for (int i = 0; i < payload_len; i++)
+    {
+        printf("%02X ", payload[i]);
+    }
+    printf("\n\n");
+}
+
+int msg_open_task(Frame *frame)
+{
+    Task *task = get_task_by_id(frame->header.transaction_id);
     if (task == NULL)
     {
         printf("No free tasks available\n");
         return -1;
     }
-    task->init(task, frame, server.server_fd, server.client_fd);
-    return task->task_id;
+
+    init_task(task, frame);
+    return task->id;
 }
 
 int msg_close_task(Frame *frame)
@@ -31,10 +42,8 @@ int msg_return(Frame *frame)
 }
 
 // Handle incoming data chunk for a task. This will append the new chunk to the existing input data for the task
-int msg_data_chunk(Frame *frame)
+int msg_data_chunk(RingBuffer *task_rb, Frame *frame)
 {
-    DataChunkPayload *p = (DataChunkPayload *)frame->payload;
-
     printf("[Server] Handle incoming data chunk\n");
     Task *task = get_task_by_id(frame->header.transaction_id); // Get the task ID from the first byte of the payload to identify which task this data chunk belongs to
     if (task == NULL)
@@ -44,9 +53,8 @@ int msg_data_chunk(Frame *frame)
     }
     printf("[Server] Fetched Task with id %i\n", frame->header.transaction_id);
 
-    task->receive_datachunk(task, frame);
-
-    return task->task_id;
+    send_frame_to_task(task_rb, task, frame);
+    return task->id;
 }
 
 /*
@@ -57,28 +65,15 @@ int msg_data_chunk(Frame *frame)
  *          @param 2 Connection Close Frame
  *          @param -1 error code
  */
-int handle_incoming_frame(Frame *frame, Server server, Frame *response)
+void handle_incoming_frame(RingBuffer *task_rb, Frame *frame)
 {
-    int associated_transaction_id;
+    int associated_transaction_id = 0, result_code = 0;
 
-    printf("\n[Server] Received frame \n Control Byte: %02X, Type: %02X, Start_Task_Flag: %i, Msg ID: %02X, "
+    printf("\n[Server] Received frame \n Control Byte: %02X, Type: %02X, Msg ID: %02X, "
            "Payload Len: %d\n\n",
-           frame->header.start_byte, frame->header.message_type, frame->header.flags & FLAG_START_TASK,
+           frame->header.start_byte, frame->header.message_type,
            frame->header.transaction_id, frame->header.payload_len);
     print_payload(frame->payload, frame->header.payload_len);
-
-    // Check control byte
-    switch (frame->header.start_byte)
-    {
-    case 0x00: // Connection Close Frame
-        printf("[Server] Client closed connection\n");
-        return 2;
-    case 0xAA: // Valid case
-        break;
-    default:
-        printf("Invalid Start Byte\n");
-        return -1; // Invalid start byte
-    }
 
     // Call differenet message handler
     switch (frame->header.message_type)
@@ -86,9 +81,10 @@ int handle_incoming_frame(Frame *frame, Server server, Frame *response)
     case OPEN_TASK:
         printf("[Server] Handling OPEN_TASK message.\n");
 
-        associated_transaction_id = msg_open_task(frame, server);
+        associated_transaction_id = msg_open_task(frame);
 
-        return 0; // Send return frame back
+        result_code = 0; // Send return frame back
+        break;
     case CLOSE_TASK:
         break;
     case RETURN:
@@ -96,7 +92,7 @@ int handle_incoming_frame(Frame *frame, Server server, Frame *response)
         break;
     case DATA_CHUNK:
         printf("[Server] Handling DATA_CHUNK message\n");
-        associated_transaction_id = msg_data_chunk(frame);
+        associated_transaction_id = msg_data_chunk(task_rb, frame);
 
         break;
     case ACK:
@@ -109,8 +105,7 @@ int handle_incoming_frame(Frame *frame, Server server, Frame *response)
 
     default:
         printf("Unknown message type: %02X\n", frame->header.message_type);
-        return -2; // Unknown message type
+        result_code = -2; // Unknown message type
+        break;
     }
-
-    return 0; // Success, no response needed
 }

@@ -1,5 +1,5 @@
 #include "frame_builder.h"
-#include "enums.h"
+#include "msg_types.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -17,7 +17,6 @@ int frame_builder_return(Frame *frame, uint8_t flags, uint8_t return_code, uint8
     frame->header.transaction_id = transaction_id;
 
     // Set payload (see draft_protocol.md)
-    frame->payload = malloc(frame->header.payload_len);
     frame->payload[0] = return_code;
     return 0;
 }
@@ -38,16 +37,13 @@ int frame_builder_data_chunk(Frame *frame, uint8_t flags, uint8_t *data, uint8_t
     frame->header.start_byte = 0xAA;
     frame->header.message_type = DATA_CHUNK;
     frame->header.flags = flags;
-    frame->header.payload_len = DATACHUNK_PAYLOAD_STATIC_SIZE + data_len;
+    frame->header.payload_len = data_len;
     frame->header.transaction_id = transaction_id;
 
     // Only set payload when true
     if (data_len > 0)
     {
-        // Set payload (see draft_protocol.md)
-        frame->payload = malloc(frame->header.payload_len);
-        frame->payload[0] = starting_data_id;       // running index of data chunk
-        memcpy(&frame->payload[1], data, data_len); // Copy the function result data into the payload
+        memcpy(frame->payload, data, data_len);
     }
 
     return amount_chunks;
@@ -62,7 +58,6 @@ int frame_builder_open_task(Frame *frame, uint8_t transaction_id, uint8_t flags,
     frame->header.transaction_id = transaction_id;
 
     // Set payload (see draft_protocol.md)
-    frame->payload = malloc(frame->header.payload_len);
     frame->payload[0] = function_id;
     return 0;
 }
