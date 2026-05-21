@@ -3,11 +3,11 @@
   "configurePresets": [
     {
       "name": "debug",
-      "displayName": "Build everything",
+      "displayName": "Debug Build",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/${presetName}",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "debug"
+        "CMAKE_BUILD_TYPE": "Debug"
       }
     }
   ],
@@ -16,27 +16,16 @@
     {
       "name": "debug",
       "configurePreset": "debug"
-    },
-    {
-      "name": "system_test",
-      "inherits": "debug",
-      "configurePreset": "debug"
     }
     
   ],
 
   "testPresets": [
     {
-      "name": "system_test",
-      "displayName": "System Tests",
+      "name": "unit",
       "configurePreset": "debug",
       "output": {
         "outputOnFailure": true
-      },
-      "filter": {
-        "include": {
-          "label": "unit"
-        }
       }
     }
 
