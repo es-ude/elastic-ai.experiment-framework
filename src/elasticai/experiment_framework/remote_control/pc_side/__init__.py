@@ -1,7 +1,7 @@
 from .protocol import (
     RemoteControlProtocol,
-    RemoteTaskController,
+    TaskManager,
     TaskRegistry,
 )
 
-__all__ = ["RemoteControlProtocol","RemoteTaskController","TaskRegistry"]
+__all__ = ["RemoteControlProtocol", "TaskManager", "TaskRegistry"]

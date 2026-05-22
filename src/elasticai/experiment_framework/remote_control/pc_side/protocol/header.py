@@ -2,7 +2,13 @@ import struct
 from dataclasses import dataclass
 
 from .commands import Command
-from .constants import HEADER_FORMAT, HEADER_SIZE, MAX_TRANSACTIONS, SYNC_BYTE, MAX_PAYLOAD_lEN
+from .constants import (
+    HEADER_FORMAT,
+    HEADER_SIZE,
+    MAX_TRANSACTIONS,
+    SYNC_BYTE,
+    MAX_PAYLOAD_lEN,
+)
 from .flags import Flags
 
 

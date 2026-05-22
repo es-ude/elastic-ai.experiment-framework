@@ -10,13 +10,13 @@ from elasticai.experiment_framework.remote_control.pc_side.protocol.device_sessi
     DeviceSession,
 )
 from elasticai.experiment_framework.remote_control.pc_side.protocol.remote_task_controller import (
-    RemoteTaskController,
+    TaskManager,
+)
+from elasticai.experiment_framework.remote_control.pc_side.protocol.task import (
+    Task,
 )
 from elasticai.experiment_framework.remote_control.pc_side.protocol.task_context import (
     TaskState,
-)
-from elasticai.experiment_framework.remote_control.pc_side.protocol.task_definition import (
-    TaskDefinition,
 )
 from elasticai.experiment_framework.remote_control.pc_side.protocol.task_registry import (
     TaskRegistry,
@@ -55,7 +55,7 @@ class FakeRegistry(TaskRegistry):
         self._on_finished = on_finished
 
     def get(self, func_id):
-        return TaskDefinition(
+        return Task(
             func_id=func_id,
             need_ack=self._need_ack,
             timeout=1,
@@ -73,12 +73,12 @@ def device():
 
 @pytest.fixture
 def controller(device):
-    return RemoteTaskController(device, FakeRegistry())
+    return TaskManager(device, FakeRegistry())
 
 
 @pytest.fixture
 def controller_ack(device):
-    return RemoteTaskController(device, FakeRegistry(need_ack=True))
+    return TaskManager(device, FakeRegistry(need_ack=True))
 
 
 class TestBasic:
@@ -110,7 +110,7 @@ class TestBasic:
 class TestAck:
     @pytest.mark.asyncio
     async def test_ack_required_waits(self, device):
-        controller = RemoteTaskController(device, FakeRegistry(need_ack=True))
+        controller = TaskManager(device, FakeRegistry(need_ack=True))
 
         async def send_ack():
             await asyncio.sleep(0.01)
@@ -131,7 +131,7 @@ class TestAck:
 
     @pytest.mark.asyncio
     async def test_ack_timeout(self, device):
-        controller = RemoteTaskController(device, FakeRegistry(need_ack=True))
+        controller = TaskManager(device, FakeRegistry(need_ack=True))
 
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(
@@ -178,7 +178,7 @@ class TestCallbacks:
         async def on_opened(ctx, send):
             opened.append(ctx.transaction_id)
 
-        controller = RemoteTaskController(
+        controller = TaskManager(
             device,
             FakeRegistry(on_opened=on_opened),
         )
@@ -194,7 +194,7 @@ class TestCallbacks:
         async def on_chunk(ctx, data):
             chunks.append(data)
 
-        controller = RemoteTaskController(
+        controller = TaskManager(
             device,
             FakeRegistry(on_chunk=on_chunk),
         )
@@ -211,7 +211,7 @@ class TestCallbacks:
         async def on_finished(ctx):
             finished.append(ctx.transaction_id)
 
-        controller = RemoteTaskController(
+        controller = TaskManager(
             device,
             FakeRegistry(on_finished=on_finished),
         )

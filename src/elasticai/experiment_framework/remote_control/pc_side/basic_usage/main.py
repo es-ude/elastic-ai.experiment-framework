@@ -1,6 +1,6 @@
 import asyncio
 
-from .. import RemoteControlProtocol, RemoteTaskController, TaskRegistry
+from .. import RemoteControlProtocol, TaskManager, TaskRegistry
 
 
 class RemoteTestClient:
@@ -31,12 +31,12 @@ class RemoteTestClient:
             result["last"] = True
 
         registry.get(0).on_data_chunk_received = on_chunk
-        registry.get(0).on_finished = on_done
+        registry.get(0).on_return = on_done
         registry.get(0).on_is_last = on_last
 
         protocol = RemoteControlProtocol()
         session = await protocol.connect_tcp(self.host, self.port)
-        controller = RemoteTaskController(session, registry)
+        controller = TaskManager(session, registry)
 
         try:
             (ctx,) = await asyncio.gather(

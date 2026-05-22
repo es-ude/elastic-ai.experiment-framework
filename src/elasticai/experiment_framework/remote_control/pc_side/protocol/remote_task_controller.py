@@ -7,111 +7,94 @@ from .constants import MAX_TRANSACTIONS, NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD
 from .device_session import DeviceSession
 from .message import Message
 from .message_builder import MessageBuilder
-from .task_context import TaskContext, TaskState
-from .task_definition import TaskDefinition
-from .task_registry import TaskRegistry
+from .task import Task, TaskState
 
 _logger = logging.getLogger(__name__)
 
 
-class RemoteTaskController:
-    def __init__(self, device: DeviceSession, registry: TaskRegistry) -> None:
+class TaskManager:
+    def __init__(self, device: DeviceSession) -> None:
         self._device = device
-        self._registry = registry
+        self._running_tasks: Dict[int, Task] = {}
 
-        self._tasks: Dict[int, tuple[TaskContext, TaskDefinition]] = {}
-
-    async def open_task(self, func_id: int) -> TaskContext:
-        definition = self._registry.get(func_id)
-
+    async def open_task(self, task: Task) -> Task:
         tid = self._next_transaction_id()
+        task.state = TaskState.OPENING  # type: ignore
 
-        ctx = TaskContext(transaction_id=tid)
-        ctx.state = TaskState.OPENING
-
-        self._tasks[tid] = (ctx, definition)
+        self._running_tasks[tid] = task
 
         self._device.expect(tid, self._on_message)
 
         await self._send_message(
             command=Command.OPEN_TASK,
             transaction_id=tid,
-            func_id=func_id,
-            need_ack=definition.need_ack,
+            func_id=task.func_id,
+            need_ack=task.need_ack,
         )
 
-        if definition.need_ack:
+        if task.need_ack:
             await asyncio.wait_for(
-                ctx.opened_event.wait(),
-                timeout=definition.timeout,
+                task._opened_event.wait(),
+                timeout=task.timeout,
             )
-
-        if definition.on_opened is not None:
-
-            async def send(data: bytes) -> None:
-                await self.send_chunk(ctx, data, is_last=True)
-
-            await definition.on_opened(ctx, send)
-
-        return ctx
+            
+        await task.on_opened()
+            
+        return task
 
     async def send_chunk(
         self,
-        ctx: TaskContext,
-        data: bytes,
-        is_last: bool = False,
+        task: Task,
+        data: bytes
     ) -> None:
-        _, definition = self._tasks[ctx.transaction_id]
-        data_id = ctx.next_data_id
+        task = self._running_tasks[task.transaction_id]
+        data_id = task._next_data_id
 
-        if definition.need_ack:
+        if task.need_ack:
             fut = asyncio.get_running_loop().create_future()
-            ctx._pending_acks[data_id] = fut
+            task._pending_acks[data_id] = fut
 
         await self._send_message(
             command=Command.DATA_CHUNK,
-            transaction_id=ctx.transaction_id,
+            transaction_id=task.transaction_id,
             data_id=data_id,
             data=data,
-            need_ack=definition.need_ack,
-            is_last=is_last,
+            need_ack=task.need_ack,
+            is_last=True,
         )
 
-        if not definition.need_ack:
-            ctx.next_data_id += 1
+        if not task.need_ack:
+            task._next_data_id += 1
             return
 
         try:
             await asyncio.wait_for(
                 fut,
-                timeout=definition.timeout,
+                timeout=task.timeout,
             )
-
-            ctx.next_data_id += 1
+            task._next_data_id += 1
 
         except TimeoutError:
-            ctx._pending_acks.pop(data_id, None)
+            task._pending_acks.pop(data_id, None)
 
             raise TimeoutError(
-                f"[Client]no ACK tid={ctx.transaction_id} data_id={data_id}"
+                f"[Client]no ACK tid={task.transaction_id} data_id={data_id}"
             )
 
     async def _on_message(self, message: Message) -> None:
         try:
             tid = message.header.transaction_id
 
-            entry = self._tasks.get(tid)
+            task = self._running_tasks.get(tid)
 
-            if entry is None:
+            if task is None:
                 _logger.warning("[CLIENT]unknown tid=%d", tid)
                 return
-
-            ctx, definition = entry
 
             handlers: dict[
                 Command,
                 Callable[
-                    [TaskContext, TaskDefinition, Message],
+                    [Task, Message],
                     Awaitable[None],
                 ],
             ] = {
@@ -129,7 +112,7 @@ class RemoteTaskController:
                 )
                 return
 
-            await handler(ctx, definition, message)
+            await handler(task, message)
 
         except Exception as e:
             _logger.error("[CLIENT]error handling message: %s", e)
@@ -137,26 +120,25 @@ class RemoteTaskController:
 
     async def _handle_ack(
         self,
-        ctx: TaskContext,
-        definition: TaskDefinition,
+        task: Task,
         message: Message,
     ) -> None:
         payload = message.payload
 
-        if ctx.state == TaskState.OPENING:
-            ctx.state = TaskState.OPENED
-            ctx.opened_event.set()
+        if task.state == TaskState.OPENING:
+            task._state = TaskState.OPENED
+            task._opened_event.set()
             return
 
         self._validate_payload_has_data_id(payload)
         data_id = payload[NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD]
 
-        fut = ctx._pending_acks.pop(data_id, None)
+        fut = task._pending_acks.pop(data_id, None)
 
         if fut is None:
             _logger.warning(
                 "[CLIENT]  unexpected ACK tid=%d data_id=%d",
-                ctx.transaction_id,
+                task.transaction_id,
                 data_id,
             )
             return
@@ -166,8 +148,7 @@ class RemoteTaskController:
 
     async def _handle_chunk(
         self,
-        ctx: TaskContext,
-        definition: TaskDefinition,
+        task: Task,
         message: Message,
     ) -> None:
         payload = message.payload
@@ -175,49 +156,41 @@ class RemoteTaskController:
         self._validate_payload_has_data_id(payload)
 
         flags = message.header.flags
-
         data_id = payload[NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD]
-
         chunk = payload[NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD + 1 :]
-
-        ctx.received_data.extend(chunk)
-
-        ctx.state = TaskState.RECEIVED_DATA
+        
+        task._received_data.extend(chunk)
+        task._state = TaskState.RECEIVED_DATA
 
         if flags.need_ack:
             await self._send_message(
                 command=Command.ACK,
-                transaction_id=ctx.transaction_id,
+                transaction_id=task.transaction_id,
                 data_id=data_id,
             )
 
-        if definition.on_data_chunk_received is not None:
-            await definition.on_data_chunk_received(ctx, chunk)
+            await task.on_data_chunk_received()
 
-        if flags.is_last and definition.on_is_last is not None:
-            await definition.on_is_last(ctx)
 
     async def _handle_return(
         self,
-        ctx: TaskContext,
-        definition: TaskDefinition,
+        task: Task,
         message: Message,
     ) -> None:
-        if ctx.state not in (
+        if task.state not in (
             TaskState.OPENED,
             TaskState.OPENING,
             TaskState.RECEIVED_DATA,
         ):
             return
 
-        ctx.state = TaskState.FINISHED
+        task._state = TaskState.FINISHED
+        task._finished_event.set()
 
-        ctx.finished_event.set()
+        self._running_tasks.pop(task.transaction_id, None)
 
-        self._tasks.pop(ctx.transaction_id, None)
-
-        if definition.on_finished is not None:
-            await definition.on_finished(ctx)
+        if task.on_return is not None:
+            await task.on_return()
 
     async def _send_message(
         self,
@@ -250,9 +223,9 @@ class RemoteTaskController:
             raise ValueError("payload too short for data_id")
 
     def _next_transaction_id(self) -> int:
-        used = set(self._tasks.keys())
+        used = set(self._running_tasks.keys())
 
-        for tid in range(1, MAX_TRANSACTIONS):
+        for tid in range(0, MAX_TRANSACTIONS):
             if tid not in used:
                 return tid
 

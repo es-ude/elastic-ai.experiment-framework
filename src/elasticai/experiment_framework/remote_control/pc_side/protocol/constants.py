@@ -1,6 +1,9 @@
 import struct
 from enum import Enum
 
+
+
+
 SYNC_BYTE = 0xAA
 HEADER_FORMAT = "<BBBBH"
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
@@ -10,6 +13,8 @@ MAX_TRANSACTIONS = 0xFF
 MAX_PAYLOAD_lEN = 0xFFFF
 
 CONNECTION_TIMEOUT_SECONDS = 10
+
+RESPONSE_TIMEOUT = 5.0
 
 NUM_BYTES_FOR_ID = 1
 
