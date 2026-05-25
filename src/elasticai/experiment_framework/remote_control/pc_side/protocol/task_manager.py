@@ -4,26 +4,35 @@ from typing import Awaitable, Callable, Dict
 
 from .commands import Command
 from .constants import MAX_TRANSACTIONS, NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD
-from .device_session import DeviceSession
 from .message import Message
 from .message_builder import MessageBuilder
+from .message_io import MessageIO
 from .task import Task, TaskState
 
 _logger = logging.getLogger(__name__)
 
 
 class TaskManager:
-    def __init__(self, device: DeviceSession) -> None:
+    def __init__(self, device: MessageIO) -> None:
         self._device = device
         self._running_tasks: Dict[int, Task] = {}
+        self._receiver: asyncio.Task
+        self._receiver_started = asyncio.Event()
+
+    async def start(self) -> None:
+        self._receiver = asyncio.create_task(self._receive_loop())
+        await self._receiver_started.wait()
+        
+    async def stop(self) -> None:
+        self._running = False
+        if self._receive_loop:
+            self._receiver.cancel()
 
     async def open_task(self, task: Task) -> Task:
         tid = self._next_transaction_id()
-        task.state = TaskState.OPENING  # type: ignore
+        task._state = TaskState.OPENING
 
         self._running_tasks[tid] = task
-
-        self._device.expect(tid, self._on_message)
 
         await self._send_message(
             command=Command.OPEN_TASK,
@@ -37,16 +46,12 @@ class TaskManager:
                 task._opened_event.wait(),
                 timeout=task.timeout,
             )
-            
+
         await task.on_opened()
-            
+
         return task
 
-    async def send_chunk(
-        self,
-        task: Task,
-        data: bytes
-    ) -> None:
+    async def send_chunk(self, task: Task, data: bytes) -> None:
         task = self._running_tasks[task.transaction_id]
         data_id = task._next_data_id
 
@@ -158,7 +163,7 @@ class TaskManager:
         flags = message.header.flags
         data_id = payload[NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD]
         chunk = payload[NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD + 1 :]
-        
+
         task._received_data.extend(chunk)
         task._state = TaskState.RECEIVED_DATA
 
@@ -170,7 +175,6 @@ class TaskManager:
             )
 
             await task.on_data_chunk_received()
-
 
     async def _handle_return(
         self,
@@ -216,7 +220,7 @@ class TaskManager:
 
         message = builder.build()
 
-        await self._device.connection.send(message.to_bytes())
+        await self._device.write(message)
 
     def _validate_payload_has_data_id(self, payload: bytes) -> None:
         if len(payload) <= NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD:
@@ -230,3 +234,13 @@ class TaskManager:
                 return tid
 
         raise RuntimeError(f"[Client]all {MAX_TRANSACTIONS} transaction IDs in use")
+
+    async def _receive_loop(self) -> None:
+        self._running = True
+        self._receiver_started.set()
+
+        while self._running:
+            message = await self._device.read()
+            await self._on_message(message)
+
+        self._running = False

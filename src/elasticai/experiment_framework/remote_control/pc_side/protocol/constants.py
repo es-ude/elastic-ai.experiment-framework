@@ -1,9 +1,6 @@
 import struct
 from enum import Enum
 
-
-
-
 SYNC_BYTE = 0xAA
 HEADER_FORMAT = "<BBBBH"
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)

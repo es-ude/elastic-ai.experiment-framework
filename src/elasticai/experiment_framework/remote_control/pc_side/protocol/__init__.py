@@ -1,12 +1,12 @@
 from .commands import Command
-from .device_session import DeviceSession
 from .exceptions import *
 from .flags import Flags
 from .header import Header
+from .io_stream import IOStream
 from .message import Message
-from .remote_control_protocol import RemoteControlProtocol
-from .remote_task_controller import TaskManager
+from .message_io import MessageIO
 from .task import Task
+from .task_manager import TaskManager
 
 __all__ = [
     "Command",
@@ -14,7 +14,7 @@ __all__ = [
     "Message",
     "Header",
     "Task",
-    "DeviceSession",
+    "IOStream",
+    "MessageIO",
     "TaskManager",
-    "RemoteControlProtocol",
 ]

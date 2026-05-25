@@ -1,4 +1,3 @@
-from unittest import mock
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -7,7 +6,7 @@ from elasticai.experiment_framework.remote_control.pc_side.protocol.device_sessi
     DeviceSession,
 )
 from elasticai.experiment_framework.remote_control.pc_side.protocol.remote_control_protocol import (
-    RemoteControlProtocol,
+    ConnectionProvider,
 )
 
 
@@ -22,11 +21,11 @@ def mocked_connection():
         return_value=conn,
     ):
         yield conn
-        
+
+
 @pytest.mark.asyncio
 async def test_connect_tcp_creates_session(mocked_connection):
-    protocol = RemoteControlProtocol()
-    
+    protocol = ConnectionProvider()
 
     with patch.object(DeviceSession, "start", new=AsyncMock()):
         session = await protocol.connect_tcp("localhost", 1234)
@@ -40,7 +39,7 @@ async def test_connect_tcp_creates_session(mocked_connection):
 
 @pytest.mark.asyncio
 async def test_duplicate_device_raises(mocked_connection):
-    protocol = RemoteControlProtocol()
+    protocol = ConnectionProvider()
 
     with patch.object(DeviceSession, "start", new=AsyncMock()):
         await protocol.connect_tcp("localhost", 1234)
@@ -51,7 +50,7 @@ async def test_duplicate_device_raises(mocked_connection):
 
 @pytest.mark.asyncio
 async def test_disconnect_removes_session(mocked_connection):
-    protocol = RemoteControlProtocol()
+    protocol = ConnectionProvider()
 
     with patch(
         "elasticai.experiment_framework.remote_control.pc_side.protocol.remote_control_protocol.Connection"
@@ -73,7 +72,7 @@ async def test_disconnect_removes_session(mocked_connection):
 
 @pytest.mark.asyncio
 async def test_max_devices_reached(mocked_connection):
-    protocol = RemoteControlProtocol(max_devices=1)
+    protocol = ConnectionProvider(max_devices=1)
 
     with patch(
         "elasticai.experiment_framework.remote_control.pc_side.protocol.remote_control_protocol.Connection"
@@ -91,7 +90,7 @@ async def test_max_devices_reached(mocked_connection):
 
 @pytest.mark.asyncio
 async def test_find_by_id(mocked_connection):
-    protocol = RemoteControlProtocol()
+    protocol = ConnectionProvider()
 
     with patch.object(DeviceSession, "start", new=AsyncMock()):
         session = await protocol.connect_tcp("localhost", 1234)
@@ -102,7 +101,7 @@ async def test_find_by_id(mocked_connection):
 
 
 def test_find_by_id_returns_none():
-    protocol = RemoteControlProtocol()
+    protocol = ConnectionProvider()
 
     result = protocol.find_by_id(999)
 
@@ -111,7 +110,7 @@ def test_find_by_id_returns_none():
 
 @pytest.mark.asyncio
 async def test_find_by_info(mocked_connection):
-    protocol = RemoteControlProtocol()
+    protocol = ConnectionProvider()
 
     with patch.object(DeviceSession, "start", new=AsyncMock()):
         session = await protocol.connect_tcp("localhost", 1234)
@@ -122,7 +121,7 @@ async def test_find_by_info(mocked_connection):
 
 
 def test_find_by_info_raises():
-    protocol = RemoteControlProtocol()
+    protocol = ConnectionProvider()
 
     with pytest.raises(Exception):
         protocol.find_by_info({"host": "missing", "port": "1"})
@@ -130,7 +129,7 @@ def test_find_by_info_raises():
 
 @pytest.mark.asyncio
 async def test_connection_failure_closes_connection(mocked_connection):
-    protocol = RemoteControlProtocol()
+    protocol = ConnectionProvider()
     mocked_connection.connect = AsyncMock(side_effect=Exception("boom"))
     with pytest.raises(Exception):
         await protocol.connect_tcp("localhost", 1234)

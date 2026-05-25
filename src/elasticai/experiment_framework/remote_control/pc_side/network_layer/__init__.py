@@ -1,4 +1,4 @@
-from .connection import Connection
-from .internal_transport_protocol import InternalTransportProtocolTCP
+from .connection_provider import ConnectionProvider
+from .tcp_protocol_stream import TCPProtocolStream
 
-__all__ = ["Connection", "InternalTransportProtocolTCP"]
+__all__ = ["ConnectionProvider", "TCPProtocolStream"]

@@ -7,11 +7,18 @@ import time
 
 import pytest
 
-from elasticai.experiment_framework.remote_control.pc_side.basic_usage.main import (
-    RemoteTestClient,
+from elasticai.experiment_framework.remote_control.pc_side.network_layer.connection_provider import (
+    ConnectionProvider,
 )
-from elasticai.experiment_framework.remote_control.pc_side.protocol.task_context import (
+from elasticai.experiment_framework.remote_control.pc_side.protocol.message_io import (
+    MessageIO,
+)
+from elasticai.experiment_framework.remote_control.pc_side.protocol.task import (
+    Task,
     TaskState,
+)
+from elasticai.experiment_framework.remote_control.pc_side.protocol.task_manager import (
+    TaskManager,
 )
 
 logging.basicConfig(format="%(message)s")
@@ -24,7 +31,7 @@ SERVER_PORT = 8080
 SERVER_BIN = "build/debug/embedded_remote_control"
 
 
-def wait_for_port(host, port, timeout=10.0):
+def wait_for_port(host, port, timeout=15.0):
     start = time.time()
 
     while time.time() - start < timeout:
@@ -93,11 +100,49 @@ def c_server(build_server):
         proc.kill()
 
 
-@pytest.mark.parametrize("msg", [b"hello"])
-@pytest.mark.asyncio
-async def test_messages(c_server, msg):
-    client = RemoteTestClient(SERVER_HOST, SERVER_PORT)
+_logger = logging.getLogger(__name__)
 
-    ctx, result = await client.run_task(msg)
 
-    assert ctx.state == TaskState.FINISHED
+class DummyTask(Task):
+    def __init__(self, manager: TaskManager, func_id: int, msg: bytes) -> None:
+        self.manager = manager
+        self.msg = msg
+        self.func_id = 0
+        self.need_ack = False
+        super().__init__()
+        self.result = {
+            "chunks": [],
+            "done": False,
+            "last": False,
+        }
+
+    async def on_opened(self):
+        _logger.debug(f"[CLIENT] callback: task openned state = {self.state}")
+        await self.manager.send_chunk(self, self.msg)
+
+    async def on_data_chunk_received(self):
+        _logger.debug(f"[CLIENT] callback: data chunk received{self.received_data} ")
+        self.result["chunks"].append()
+
+    async def on_return(self):
+        _logger.debug(f"[CLIENT] callback: task returned = {self.state}")
+        self.result["done"] = True
+
+
+class TestClient:
+    @pytest.mark.asyncio
+    async def test_round_trip_message(self, c_server):
+        data = b"Hello World"
+        provider = ConnectionProvider()
+        stream = await provider.connectTCP(SERVER_HOST, SERVER_PORT)
+        device = MessageIO(stream)
+        manager = TaskManager(device)
+        await manager.start()
+        task = DummyTask(manager, func_id=0, msg=data)
+
+        (task_openned,) = (await manager.open_task(task),)
+        await task_openned._finished_event.wait()
+        
+
+        assert task.state == TaskState.FINISHED
+        assert task.received_data == data
