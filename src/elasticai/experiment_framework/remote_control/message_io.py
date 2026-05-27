@@ -26,25 +26,17 @@ class MessageIO:
         header = Header.from_bytes(header_bytes)
 
         payload = await self._do_read(header.payload_len)
-        self._logger.debug(
-            "[CLIENT] received payload: %s",
-            payload.hex(),
-            stacklevel=3
-        )
+        self._logger.debug("[CLIENT] received payload: %s", payload.hex(), stacklevel=3)
 
         msg = Message.from_bytes(header_bytes + payload)
         self._logger.debug(
-            "[CLIENT] received message: %s",
-            format_message(msg),
-            stacklevel=3
+            "[CLIENT] received message: %s", format_message(msg), stacklevel=3
         )
 
         return msg
 
     async def write(self, msg: Message) -> None:
         self._logger.debug(
-            "[CLIENT] sending message: %s",
-            format_message(msg),
-            stacklevel=3
+            "[CLIENT] sending message: %s", format_message(msg), stacklevel=3
         )
         await self._stream.write(msg.to_bytes())

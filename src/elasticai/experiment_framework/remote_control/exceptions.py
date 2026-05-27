@@ -9,14 +9,14 @@ class UnexpectedMessageError(ProtocolError):
 class InvalidHeaderError(ProtocolError):
     pass
 
-class DeviceAlreadyConnectedError(ProtocolError): 
+
+class DeviceAlreadyConnectedError(ProtocolError):
     pass
 
 
-class DeviceNotFoundError(ProtocolError): 
+class DeviceNotFoundError(ProtocolError):
     pass
 
 
-class MaxDevicesReachedError(ProtocolError): 
+class MaxDevicesReachedError(ProtocolError):
     pass
-

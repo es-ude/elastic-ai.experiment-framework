@@ -2,16 +2,16 @@ import struct
 
 import pytest
 
-from elasticai.experiment_framework.remote_control.pc_side.protocol.commands import (
+from elasticai.experiment_framework.remote_control.commands import (
     Command,
 )
-from elasticai.experiment_framework.remote_control.pc_side.protocol.constants import (
+from elasticai.experiment_framework.remote_control.constants import (
     HEADER_FORMAT,
     HEADER_SIZE,
     SYNC_BYTE,
 )
-from elasticai.experiment_framework.remote_control.pc_side.protocol.flags import Flags
-from elasticai.experiment_framework.remote_control.pc_side.protocol.header import Header
+from elasticai.experiment_framework.remote_control.flags import Flags
+from elasticai.experiment_framework.remote_control.header import Header
 
 
 def test_to_bytes():
@@ -49,6 +49,7 @@ def test_from_bytes():
     assert h.transaction_id == 16
     assert h.payload_len == 17
 
+
 def test_raise_exception_when_wrong_sync_bytes():
     h_bytes = struct.pack(
         HEADER_FORMAT,
@@ -73,25 +74,28 @@ def test_raise_exception_when_invalid_size():
     with pytest.raises(ValueError, match="too short"):
         Header.from_bytes(h_bytes)
 
+
 def test_raise_exception_when_invalid_transaction_id():
-    
+
     with pytest.raises(ValueError, match="transaction_id"):
         Header(
-        Command.ACK,
-        Flags(need_ack=True, has_crc=False, is_last=False),
-        transaction_id=1578,
-        payload_len=63,
+            Command.ACK,
+            Flags(need_ack=True, has_crc=False, is_last=False),
+            transaction_id=1578,
+            payload_len=63,
         )
-        
+
+
 def test_raise_exception_when_invalid_payload_len():
-    
+
     with pytest.raises(ValueError, match="payload_len"):
         Header(
-        Command.ACK,
-        Flags(need_ack=True, has_crc=False, is_last=False),
-        transaction_id=14,
-        payload_len=-1,
+            Command.ACK,
+            Flags(need_ack=True, has_crc=False, is_last=False),
+            transaction_id=14,
+            payload_len=-1,
         )
+
 
 @pytest.mark.parametrize(
     "command, flags, transaction_id, payload_len",
@@ -111,5 +115,3 @@ def test_to_bytes_from_bytes(command, flags, transaction_id, payload_len):
     assert h2.flags == Flags.from_byte(flags)
     assert h2.transaction_id == transaction_id
     assert h2.payload_len == payload_len
-    
-

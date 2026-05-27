@@ -1,23 +1,24 @@
 from .commands import Command
+from .connection_provider import ConnectionProvider
+from .exceptions import *  # noqa: F403
 from .flags import Flags
-from .message import Message
 from .header import Header
-from .task_context import TaskContext
-from .task_definition import TaskDefinition
-from .task_registry import TaskRegistry
-from .device_session import DeviceSession
-from .remote_task_controller import RemoteTaskController
-from .remote_control_protocol import RemoteControlProtocol
+from .io_stream import IOStream
+from .message import Message
+from .message_io import MessageIO
+from .task import Task
+from .task_manager import TaskManager
+from .tcp_protocol_stream import TCPProtocolStream
 
 __all__ = [
     "Command",
     "Flags",
     "Message",
     "Header",
-    "TaskContext",
-    "TaskDefinition",
-    "TaskRegistry",
-    "DeviceSession",
-    "RemoteTaskController",
-    "RemoteControlProtocol",
+    "Task",
+    "IOStream",
+    "MessageIO",
+    "TaskManager",
+    "ConnectionProvider",
+    "TCPProtocolStream",
 ]

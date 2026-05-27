@@ -1,10 +1,12 @@
+from abc import abstractmethod
 from collections.abc import Generator
 from contextlib import contextmanager
-from abc import abstractmethod
-from typing import Protocol, cast
-from serial.tools import list_ports
 from dataclasses import dataclass
+from typing import Protocol, cast
+
 from serial import Serial as _Serial
+from serial.tools import list_ports
+
 from .io_stream import IOStream
 
 

@@ -22,7 +22,7 @@ class TaskManager:
     async def start(self) -> None:
         self._receiver = asyncio.create_task(self._receive_loop())
         await self._receiver_started.wait()
-        
+
     async def stop(self) -> None:
         self._running = False
         if self._receive_loop:

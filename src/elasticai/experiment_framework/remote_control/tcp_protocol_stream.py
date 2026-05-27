@@ -2,7 +2,7 @@ import asyncio
 import logging
 from typing import Callable
 
-from ..protocol.io_stream import IOStream
+from .io_stream import IOStream
 
 _logger = logging.getLogger(__name__)
 
@@ -11,7 +11,7 @@ class TCPProtocolStream(asyncio.Protocol, IOStream):
     def __init__(self, on_lost: Callable):
         self._buffer = bytearray()
         self._waiter = None
-        self._on_lost = on_lost 
+        self._on_lost = on_lost
 
     def connection_made(self, transport: asyncio.Transport):
         self.transport = transport
@@ -21,7 +21,7 @@ class TCPProtocolStream(asyncio.Protocol, IOStream):
 
         if self._waiter and not self._waiter.done():
             self._waiter.set_result(None)
-    
+
     def connection_lost(self, exc: Exception | None) -> None:
         return self._on_lost(exc)
 

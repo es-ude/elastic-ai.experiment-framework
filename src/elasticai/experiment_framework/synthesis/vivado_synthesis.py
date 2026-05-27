@@ -1,30 +1,35 @@
-from contextlib import ExitStack
-from typing import Self, override, cast
 import dataclasses
+import logging
+import os
+import shlex
+from contextlib import ExitStack
+from dataclasses import dataclass
+from pathlib import Path
+from string import Template
+from tarfile import open as tar_open
+from tempfile import TemporaryDirectory
+from typing import Self, cast, override
+
+import click
+from fabric import Connection as _fabConnection
+from invoke import Context as _invContext
 
 from elasticai.experiment_framework.synthesis.synthesis import (
     CachedSynthesis,
     TargetPlatforms,
-    SynthesisConfig as _SynthConfig,
-    SynthesisStrategy as _SynthStrat,
     load_synthesis_config_from_env,
 )
-from .verbosity import Verbosity
-from dataclasses import dataclass
-import logging
-from fabric import Connection as _fabConnection
-import click
-from pathlib import Path
-from tempfile import TemporaryDirectory
-from tarfile import open as tar_open
-from string import Template
-from invoke import Context as _invContext
-import os
-import shlex
+from elasticai.experiment_framework.synthesis.synthesis import (
+    SynthesisConfig as _SynthConfig,
+)
+from elasticai.experiment_framework.synthesis.synthesis import (
+    SynthesisStrategy as _SynthStrat,
+)
+
 from ._connection import Connection as _Connection
 from ._connection_fabric import ConnectionWrapperForFabric as _fabConnectionWrapper
 from ._connection_invoke import ConnectionWrapperForInvoke as _invokeConnection
-
+from .verbosity import Verbosity
 
 _fpga_model_for_platform = {TargetPlatforms.env5: "xc7s15ftgb196-2"}
 

@@ -2,10 +2,10 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from elasticai.experiment_framework.remote_control.pc_side.protocol.commands import (
+from elasticai.experiment_framework.remote_control.commands import (
     Command,
 )
-from elasticai.experiment_framework.remote_control.pc_side.protocol.task import (
+from elasticai.experiment_framework.remote_control.task import (
     TaskState,
 )
 

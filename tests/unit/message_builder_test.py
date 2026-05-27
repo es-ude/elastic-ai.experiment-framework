@@ -1,12 +1,12 @@
 import pytest
 
-from elasticai.experiment_framework.remote_control.pc_side.protocol.commands import (
+from elasticai.experiment_framework.remote_control.commands import (
     Command,
 )
-from elasticai.experiment_framework.remote_control.pc_side.protocol.constants import (
+from elasticai.experiment_framework.remote_control.constants import (
     NUM_BYTES_FOR_ID,
 )
-from elasticai.experiment_framework.remote_control.pc_side.protocol.message_builder import (
+from elasticai.experiment_framework.remote_control.message_builder import (
     MessageBuilder,
 )
 

@@ -7,17 +7,17 @@ import time
 
 import pytest
 
-from elasticai.experiment_framework.remote_control.pc_side.network_layer.connection_provider import (
+from elasticai.experiment_framework.remote_control.connection_provider import (
     ConnectionProvider,
 )
-from elasticai.experiment_framework.remote_control.pc_side.protocol.message_io import (
+from elasticai.experiment_framework.remote_control.message_io import (
     MessageIO,
 )
-from elasticai.experiment_framework.remote_control.pc_side.protocol.task import (
+from elasticai.experiment_framework.remote_control.task import (
     Task,
     TaskState,
 )
-from elasticai.experiment_framework.remote_control.pc_side.protocol.task_manager import (
+from elasticai.experiment_framework.remote_control.task_manager import (
     TaskManager,
 )
 
@@ -142,7 +142,6 @@ class TestClient:
 
         (task_openned,) = (await manager.open_task(task),)
         await task_openned._finished_event.wait()
-        
 
         assert task.state == TaskState.FINISHED
         assert task.received_data == data

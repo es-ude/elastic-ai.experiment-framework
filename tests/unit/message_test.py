@@ -1,14 +1,14 @@
 import pytest
 
-from elasticai.experiment_framework.remote_control.pc_side.protocol.commands import (
+from elasticai.experiment_framework.remote_control.commands import (
     Command,
 )
-from elasticai.experiment_framework.remote_control.pc_side.protocol.constants import (
+from elasticai.experiment_framework.remote_control.constants import (
     HEADER_SIZE,
 )
-from elasticai.experiment_framework.remote_control.pc_side.protocol.flags import Flags
-from elasticai.experiment_framework.remote_control.pc_side.protocol.header import Header
-from elasticai.experiment_framework.remote_control.pc_side.protocol.message import (
+from elasticai.experiment_framework.remote_control.flags import Flags
+from elasticai.experiment_framework.remote_control.header import Header
+from elasticai.experiment_framework.remote_control.message import (
     Message,
 )
 
@@ -52,7 +52,8 @@ def test_to_bytes(header):
 
     assert data[:HEADER_SIZE] == header.to_bytes()
     assert data[HEADER_SIZE:] == payload
-    
+
+
 def test_from_bytes(header):
     payload = b"Hello world"
     data = header.to_bytes() + payload

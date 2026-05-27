@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from enum import Enum, auto
 from typing import Awaitable, Dict
 
-from elasticai.experiment_framework.remote_control.pc_side.protocol.constants import (
+from elasticai.experiment_framework.remote_control.constants import (
     RESPONSE_TIMEOUT,
 )
 
@@ -20,7 +20,7 @@ class Task(ABC):
         self.timeout: float = RESPONSE_TIMEOUT
         self.need_ack: bool = False
         self.func_id: int = 0
-        
+
         self._transaction_id: int = 0
         self._state: TaskState = TaskState.OPENING
         self._opened_event: asyncio.Event = asyncio.Event()
@@ -28,7 +28,6 @@ class Task(ABC):
         self._next_data_id: int = 0
         self._received_data: bytearray = bytearray()
         self._pending_acks: Dict[int, asyncio.Future] = {}
-        
 
     @property
     def transaction_id(self) -> int:
@@ -43,10 +42,10 @@ class Task(ABC):
         return bytes(self._received_data)
 
     @abstractmethod
-    async def on_opened(self) -> Awaitable[None]: ...
+    async def on_opened(self) -> None: ...
 
     @abstractmethod
-    async def on_data_chunk_received(self) -> Awaitable[None]: ...
+    async def on_data_chunk_received(self) -> None: ...
 
     @abstractmethod
-    async def on_return(self) -> Awaitable[None]: ...
+    async def on_return(self) -> None: ...
