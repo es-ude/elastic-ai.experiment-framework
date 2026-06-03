@@ -50,7 +50,7 @@ class Header:
             HEADER_FORMAT, data
         )
         return cls(
-            command=Command.from_bytes(bytes([cmd])),
+            command=Command.from_value(bytes([cmd])),
             flags=Flags.from_byte(flags),
             transaction_id=transaction_id,
             payload_len=payload_len,

@@ -16,7 +16,3 @@ class DeviceAlreadyConnectedError(ProtocolError):
 
 class DeviceNotFoundError(ProtocolError):
     pass
-
-
-class MaxDevicesReachedError(ProtocolError):
-    pass

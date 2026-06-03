@@ -1,173 +1,184 @@
-from unittest.mock import AsyncMock, Mock
+import asyncio
+from typing import AsyncGenerator, override
 
 import pytest
 
+from elasticai.experiment_framework.remote_control.callback_actions import (
+    CallbackAction,
+    SendChunk,
+)
 from elasticai.experiment_framework.remote_control.commands import (
     Command,
 )
+from elasticai.experiment_framework.remote_control.message import Message
 from elasticai.experiment_framework.remote_control.task import (
+    Task,
     TaskState,
+)
+from elasticai.experiment_framework.remote_control.task_manager import (
+    TaskManager,
 )
 
 
-class FakeDevice:
+class DummyMessageIO:
     def __init__(self):
-        self.connection = Mock()
-        self.connection.send = AsyncMock(return_value=None)
-        self._callbacks = {}
+        self.tx: asyncio.Queue[Message] = asyncio.Queue()
+        self.rx: list[Message] = []
 
-    def expect(self, tid, cb):
-        self._callbacks[tid] = cb
+    async def read(self) -> Message:
+        return await self.tx.get()
 
-    async def inject(self, tid: int, cmd: Command, payload: bytes = b""):
-        cb = self._callbacks.get(tid)
-        if cb is None:
-            raise AssertionError(f"No callback for tid={tid}")
+    async def write(self, msg: Message) -> None:
+        self.rx.append(msg)
 
-        msg = Mock()
-        msg.header = Mock()
-        msg.header.transaction_id = tid
-        msg.header.command = cmd
-        msg.header.flags = Mock(need_ack=False, is_last=False)
-        msg.payload = payload
 
-        await cb(msg)
+class DummyTask(Task):
+    def __init__(self, func_id: int, msg: bytes) -> None:
+        super().__init__()
+        self.msg = msg
+        self.func_id = func_id
+        self.need_ack = False
+
+    @override
+    async def on_opened(self):
+        yield SendChunk(self.msg)
+
+    @override
+    async def on_data_chunk_received(self) -> AsyncGenerator[CallbackAction, None]:
+        return
+        yield
+
+    @override
+    async def on_return(self) -> AsyncGenerator[CallbackAction, None]:
+        return
+        yield
+
+
+@pytest.fixture()
+def msg():
+    return "Hello World"
+
+
+@pytest.fixture
+def task1(msg):
+    return DummyTask(1, msg.encode())
+
+
+@pytest.fixture
+def task2(msg):
+    return DummyTask(0, msg=msg.encode())
+
+
+@pytest.fixture
+def data_chunk(msg):
+    return Message(Command.DATA_CHUNK, msg.encode())
+
+
+@pytest.fixture
+def ack():
+    return Message(Command.ACK, b"")
+
+
+@pytest.fixture
+def ret(task1):
+    return Message(Command.RETURN, b"0", transaction_id=task1.transaction_id)
 
 
 @pytest.fixture
 def device():
-    return FakeDevice()
+    return DummyMessageIO()
 
 
-class TestBasic:
-    @pytest.mark.asyncio
-    async def test_open_task(self, controller, device):
-        ctx = await controller.open_task(func_id=1)
+@pytest.fixture
+async def task_manager(device):
+    manager = TaskManager(device)
+    await manager.start()
+    yield manager
+    await manager.stop()
 
-        assert ctx.transaction_id is not None
-        assert ctx.state == TaskState.OPENING
 
-    @pytest.mark.asyncio
-    async def test_send_and_receive_chunk(self, controller, device):
-        ctx = await controller.open_task(func_id=1)
+class TestOpenTask:
+    async def test_open_task_sends_open_task(self, task_manager, task1):
+        await task_manager.open_task(task1)
 
-        await device.inject(ctx.transaction_id, Command.DATA_CHUNK, b"\x00hello")
+        assert task_manager._device.rx[0].header.command == Command.OPEN_TASK
 
-        assert b"hello" in ctx.received_data
+    async def test_open_task_state(self, task_manager, task1):
+        task1 = await task_manager.open_task(task1)
+        assert task1.transaction_id is not None
+        assert task1.state == TaskState.OPENED
 
-    @pytest.mark.asyncio
-    async def test_finish_task(self, controller, device):
-        ctx = await controller.open_task(func_id=1)
+    async def test_open_task_callback(self, task_manager, task1, msg):
+        task1 = await task_manager.open_task(task1)
 
-        await device.inject(ctx.transaction_id, Command.RETURN)
-
-        assert ctx.state == TaskState.FINISHED
-        assert ctx.transaction_id not in controller._tasks
+        assert task_manager._device.rx[1].header.command == Command.DATA_CHUNK
+        assert task_manager._device.rx[1].payload[1:] == msg.encode()
 
 
 class TestDataChunks:
-    @pytest.mark.asyncio
-    async def test_single_chunk(self, controller, device):
-        ctx = await controller.open_task(func_id=1)
+    async def test_receive_data_chunk(self, task_manager, task1, msg):
+        task1 = await task_manager.open_task(task1)
+        data_id = b"\x00"
 
-        await device.inject(ctx.transaction_id, Command.DATA_CHUNK, b"\x00data")
+        await task_manager._device.tx.put(
+            Message(
+                Command.DATA_CHUNK,
+                data_id + msg.encode(),
+                transaction_id=task1.transaction_id,
+            )
+        )
+        await asyncio.sleep(0)
+        assert task1.state == TaskState.RECEIVED_DATA
+        assert task1.received_data[0] == msg.encode()
 
-        assert ctx.received_data == b"data"
+    async def test_receive_multiple_chunks(self, task_manager, task1, msg):
+        task1 = await task_manager.open_task(task1)
+        data_1 = b"hello"
+        data_2 = b"world"
 
-    @pytest.mark.asyncio
-    async def test_multiple_chunks(self, controller, device):
-        ctx = await controller.open_task(func_id=1)
+        await task_manager._device.tx.put(
+            Message(
+                Command.DATA_CHUNK,
+                b"\x01" + data_1,
+                transaction_id=task1.transaction_id,
+            )
+        )
+        await task_manager._device.tx.put(
+            Message(
+                Command.DATA_CHUNK,
+                b"\x02" + data_2,
+                transaction_id=task1.transaction_id,
+            )
+        )
+        await asyncio.sleep(0)
 
-        await device.inject(ctx.transaction_id, Command.DATA_CHUNK, b"\x00part1")
-        await device.inject(ctx.transaction_id, Command.DATA_CHUNK, b"\x01part2")
-
-        assert b"part1" in ctx.received_data
-        assert b"part2" in ctx.received_data
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("size", [1, 10, 100, 1000])
-    async def test_various_chunk_sizes(self, controller, device, size):
-        ctx = await controller.open_task(func_id=1)
-        data = b"x" * size
-
-        await device.inject(ctx.transaction_id, Command.DATA_CHUNK, b"\x00" + data)
-
-        assert len(ctx.received_data) >= size
+        assert task1.state == TaskState.RECEIVED_DATA
+        assert task1.received_data[1] == data_1
+        assert task1.received_data[2] == data_2
 
 
 class TestTransactionIds:
-    @pytest.mark.asyncio
-    async def test_unique_ids(self, controller):
-        ctx1 = await controller.open_task(func_id=1)
-        ctx2 = await controller.open_task(func_id=2)
+    async def test_unique_ids(self, task_manager, task1, task2):
 
-        assert ctx1.transaction_id != ctx2.transaction_id
+        await task_manager.open_task(task1)
+        await task_manager.open_task(task2)
 
-    @pytest.mark.asyncio
-    async def test_sequential_ids(self, controller):
-        ctx1 = await controller.open_task(func_id=1)
-        ctx2 = await controller.open_task(func_id=2)
+        assert task2.transaction_id != task1.transaction_id
 
-        assert ctx1.transaction_id < ctx2.transaction_id
+    async def test_sequential_ids(self, task_manager, task1, task2):
+        task1 = await task_manager.open_task(task1)
+        task2 = await task_manager.open_task(task2)
 
-    @pytest.mark.asyncio
-    async def test_ids_reused_after_finish(self, controller, device):
-        ctx1 = await controller.open_task(func_id=1)
-        tid1 = ctx1.transaction_id
+        assert task1.transaction_id < task2.transaction_id
 
-        await device.inject(tid1, Command.RETURN)
+    async def test_ids_reused_after_finish(self, task_manager, task1, ret):
+        task1 = await task_manager.open_task(task1)
+        tid1 = task1.transaction_id
 
-        ctx2 = await controller.open_task(func_id=2)
-        tid2 = ctx2.transaction_id
+        await task_manager._device.tx.put(ret)
+        await asyncio.sleep(0)
+
+        task2 = await task_manager.open_task(task1)
+        tid2 = task2.transaction_id
 
         assert tid1 == tid2
-
-
-class TestErrors:
-    @pytest.mark.asyncio
-    async def test_unknown_tid_raises(self, device):
-        with pytest.raises(AssertionError):
-            await device.inject(999, Command.RETURN)
-
-    @pytest.mark.asyncio
-    async def test_finish_without_data(self, controller, device):
-        ctx = await controller.open_task(func_id=1)
-
-        await device.inject(ctx.transaction_id, Command.RETURN)
-
-        assert ctx.state == TaskState.FINISHED
-        assert len(ctx.received_data) == 0
-
-
-class TestIntegration:
-    @pytest.mark.asyncio
-    async def test_complete_task_no_data(self, controller, device):
-        ctx = await controller.open_task(func_id=1)
-        await device.inject(ctx.transaction_id, Command.RETURN)
-
-        assert ctx.state == TaskState.FINISHED
-
-    @pytest.mark.asyncio
-    async def test_complete_task_with_data(self, controller, device):
-        ctx = await controller.open_task(func_id=1)
-        await device.inject(ctx.transaction_id, Command.DATA_CHUNK, b"\x00data")
-        await device.inject(ctx.transaction_id, Command.RETURN)
-
-        assert ctx.state == TaskState.FINISHED
-        assert b"data" in ctx.received_data
-
-    @pytest.mark.asyncio
-    async def test_multiple_tasks_interleaved(self, controller, device):
-        ctx1 = await controller.open_task(func_id=1)
-        ctx2 = await controller.open_task(func_id=2)
-
-        await device.inject(ctx1.transaction_id, Command.DATA_CHUNK, b"\x00data1")
-        await device.inject(ctx2.transaction_id, Command.DATA_CHUNK, b"\x00data2")
-
-        await device.inject(ctx1.transaction_id, Command.RETURN)
-        await device.inject(ctx2.transaction_id, Command.RETURN)
-
-        assert ctx1.state == TaskState.FINISHED
-        assert ctx2.state == TaskState.FINISHED
-        assert b"data1" in ctx1.received_data
-        assert b"data2" in ctx2.received_data

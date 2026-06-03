@@ -2,9 +2,10 @@ import asyncio
 import logging
 from typing import AsyncIterable, Awaitable, Callable, Dict
 
-from .callback_actions import CallbackAction
+from .callback_actions import CallbackAction, SendChunk
 from .commands import Command
 from .constants import MAX_TRANSACTIONS, NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD
+from .exceptions import UnexpectedMessageError
 from .message import Message
 from .message_builder import MessageBuilder
 from .message_io import MessageIO
@@ -32,6 +33,7 @@ class TaskManager:
     async def open_task(self, task: Task) -> Task:
         tid = self._next_transaction_id()
         task._state = TaskState.OPENING
+        task._transaction_id = tid
         self._running_tasks[tid] = task
 
         await self._send_message(
@@ -55,11 +57,6 @@ class TaskManager:
     async def send_chunk(self, task: Task, data: bytes) -> None:
         task = self._running_tasks[task.transaction_id]
         data_id = task._next_data_id
-
-        if task.need_ack:
-            fut = asyncio.get_running_loop().create_future()
-            task._pending_acks[data_id] = fut
-
         await self._send_message(
             command=Command.DATA_CHUNK,
             transaction_id=task.transaction_id,
@@ -72,6 +69,9 @@ class TaskManager:
         if not task.need_ack:
             task._next_data_id += 1
             return
+
+        fut = asyncio.get_running_loop().create_future()
+        task._pending_acks[data_id] = fut
 
         try:
             await asyncio.wait_for(
@@ -95,7 +95,7 @@ class TaskManager:
 
             if task is None:
                 _logger.warning("[CLIENT]unknown tid=%d", tid)
-                return
+                raise UnexpectedMessageError()
 
             handlers: dict[
                 Command,
@@ -119,6 +119,9 @@ class TaskManager:
                 return
 
             await handler(task, message)
+
+        except UnexpectedMessageError:
+            raise UnexpectedMessageError()
 
         except Exception as e:
             _logger.error("[CLIENT]error handling message: %s", e)
@@ -164,7 +167,7 @@ class TaskManager:
         data_id = payload[NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD]
         chunk = payload[NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD + 1 :]
 
-        task._received_data.extend(chunk)
+        task._received_data[data_id] = chunk
         task._state = TaskState.RECEIVED_DATA
 
         if flags.need_ack:
@@ -226,8 +229,8 @@ class TaskManager:
 
     async def _handle_action(self, task: Task, action) -> None:
         match action:
-            case (CallbackAction.SEND_CHUNK, msg):
-                await self.send_chunk(task, msg)
+            case SendChunk(data=d):
+                await self.send_chunk(task, d)
             case _:
                 _logger.warning("[CLIENT] unknown action: %s", action)
 

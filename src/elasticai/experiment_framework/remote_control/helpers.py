@@ -9,9 +9,8 @@ _logger = logging.getLogger(__name__)
 
 
 def interpret_message(
-    msg: Message, 
-    byte_order: Literal["little", "big"] = "little"
-    ) -> Dict[str, Any]:
+    msg: Message, byte_order: Literal["little", "big"] = "little"
+) -> Dict[str, Any]:
     result: Dict[str, Any] = {
         "command": msg.header.command,
         "transaction_id": msg.header.transaction_id,
@@ -69,7 +68,9 @@ def interpret_message(
     return result
 
 
-def format_message(msg: Message, byte_order: Literal["little", "big"] = "little") -> str:
+def format_message(
+    msg: Message, byte_order: Literal["little", "big"] = "little"
+) -> str:
     header = msg.header
     parts = [
         f"command={header.command.name}",

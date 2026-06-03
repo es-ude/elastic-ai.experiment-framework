@@ -12,11 +12,13 @@ class TCPProtocolStream(asyncio.Protocol, IOStream):
         self._buffer = bytearray()
         self._waiter = None
         self._on_lost = on_lost
+        self.transport: asyncio.Transport
 
-    def connection_made(self, transport: asyncio.Transport):
+    def connection_made(self, transport) -> None:
+        assert isinstance(transport, asyncio.Transport)
         self.transport = transport
 
-    def data_received(self, data):
+    def data_received(self, data: bytes) -> None:
         self._buffer.extend(data)
 
         if self._waiter and not self._waiter.done():
@@ -34,5 +36,5 @@ class TCPProtocolStream(asyncio.Protocol, IOStream):
         del self._buffer[:num_bytes]
         return bytes(result)
 
-    async def write(self, data: bytes | bytearray):
+    async def write(self, data: bytes | bytearray) -> None:  # type: ignore[override]
         self.transport.write(data)

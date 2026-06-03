@@ -11,7 +11,7 @@ class Command(IntEnum):
     HANDSHAKE = 0x07
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "Command":
+    def from_value(cls, data: bytes) -> "Command":
         value = int.from_bytes(data, byteorder="little")
         try:
             return cls(value)

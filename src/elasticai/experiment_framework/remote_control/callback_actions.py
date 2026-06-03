@@ -1,6 +1,9 @@
-from enum import Enum
+from dataclasses import dataclass
 
 
-class CallbackAction(Enum):
-    SEND_CHUNK = "send_chunk"
-    CLOSE_TASK = "close_task"
+@dataclass
+class SendChunk:
+    data: bytes
+
+
+CallbackAction = SendChunk

@@ -80,6 +80,9 @@
     };
 
     "check:tests" = {
-    }; # this is triggered in CI with --mode before flag
+      exec = ''
+      ${uv_run} python -m pytest tests/unit tests/integration
+      '';
+    };
   };
 }

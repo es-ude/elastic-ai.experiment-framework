@@ -68,13 +68,18 @@ root = ["./src"]
 [tool.coverage.run]
 omit = [
     "tests/*py",
-    "src/elasticai/experiment_framework/*_test.py", # not testable
+    "src/elasticai/experiment_framework/*_test.py",
 ]
 source = ["src/elasticai/experiment_framework"]
 command_line = "-m pytest tests/unit"
 
-[tool.pytest]
-testpaths = ["tests/unit"]
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+markers = [
+    "hardware: requires physical hardware to be connected",
+]
 
 [tool.ruff]
 line-length = 88

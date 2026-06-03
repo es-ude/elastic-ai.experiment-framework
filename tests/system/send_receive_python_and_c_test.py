@@ -4,9 +4,14 @@ import signal
 import socket
 import subprocess
 import time
+from typing import AsyncGenerator
 
 import pytest
 
+from elasticai.experiment_framework.remote_control.callback_actions import (
+    CallbackAction,
+    SendChunk,
+)
 from elasticai.experiment_framework.remote_control.connection_provider import (
     ConnectionProvider,
 )
@@ -74,7 +79,7 @@ def c_server(build_server):
             text=True,
         )
         if result.stdout:
-            lines = result.stdout.split("\n")[1:]  # skip header
+            lines = result.stdout.split("\n")[1:]
             for line in lines:
                 if line.strip():
                     pid = int(line.split()[1])
@@ -104,31 +109,28 @@ _logger = logging.getLogger(__name__)
 
 
 class DummyTask(Task):
-    def __init__(self, manager: TaskManager, func_id: int, msg: bytes) -> None:
-        self.manager = manager
+    def __init__(self, func_id: int, msg: bytes) -> None:
         self.msg = msg
         self.func_id = 0
         self.need_ack = False
         super().__init__()
-        self.result = {
-            "chunks": [],
-            "done": False,
-            "last": False,
-        }
 
-    async def on_opened(self):
+    async def on_opened(self) -> AsyncGenerator[CallbackAction, None]:
         _logger.debug(f"[CLIENT] callback: task openned state = {self.state}")
-        await self.manager.send_chunk(self, self.msg)
+        yield SendChunk(self.msg)
 
-    async def on_data_chunk_received(self):
+    async def on_data_chunk_received(self) -> AsyncGenerator[CallbackAction, None]:
         _logger.debug(f"[CLIENT] callback: data chunk received{self.received_data} ")
-        self.result["chunks"].append()
+        return
+        yield
 
-    async def on_return(self):
+    async def on_return(self) -> AsyncGenerator[CallbackAction, None]:
         _logger.debug(f"[CLIENT] callback: task returned = {self.state}")
-        self.result["done"] = True
+        return
+        yield
 
 
+@pytest.mark.system
 class TestClient:
     @pytest.mark.asyncio
     async def test_round_trip_message(self, c_server):
@@ -138,7 +140,7 @@ class TestClient:
         device = MessageIO(stream)
         manager = TaskManager(device)
         await manager.start()
-        task = DummyTask(manager, func_id=0, msg=data)
+        task = DummyTask(func_id=0, msg=data)
 
         (task_openned,) = (await manager.open_task(task),)
         await task_openned._finished_event.wait()
