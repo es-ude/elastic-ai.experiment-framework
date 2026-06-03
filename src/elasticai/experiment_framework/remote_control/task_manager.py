@@ -1,7 +1,8 @@
 import asyncio
 import logging
-from typing import Awaitable, Callable, Dict
+from typing import AsyncIterable, Awaitable, Callable, Dict
 
+from .callback_actions import CallbackAction
 from .commands import Command
 from .constants import MAX_TRANSACTIONS, NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD
 from .message import Message
@@ -31,7 +32,6 @@ class TaskManager:
     async def open_task(self, task: Task) -> Task:
         tid = self._next_transaction_id()
         task._state = TaskState.OPENING
-
         self._running_tasks[tid] = task
 
         await self._send_message(
@@ -47,7 +47,8 @@ class TaskManager:
                 timeout=task.timeout,
             )
 
-        await task.on_opened()
+        task._state = TaskState.OPENED
+        await self._run_callback(task, task.on_opened())
 
         return task
 
@@ -131,7 +132,6 @@ class TaskManager:
         payload = message.payload
 
         if task.state == TaskState.OPENING:
-            task._state = TaskState.OPENED
             task._opened_event.set()
             return
 
@@ -174,7 +174,7 @@ class TaskManager:
                 data_id=data_id,
             )
 
-            await task.on_data_chunk_received()
+        await self._run_callback(task, task.on_data_chunk_received())
 
     async def _handle_return(
         self,
@@ -183,7 +183,6 @@ class TaskManager:
     ) -> None:
         if task.state not in (
             TaskState.OPENED,
-            TaskState.OPENING,
             TaskState.RECEIVED_DATA,
         ):
             return
@@ -193,8 +192,7 @@ class TaskManager:
 
         self._running_tasks.pop(task.transaction_id, None)
 
-        if task.on_return is not None:
-            await task.on_return()
+        await self._run_callback(task, task.on_data_chunk_received())
 
     async def _send_message(
         self,
@@ -221,6 +219,17 @@ class TaskManager:
         message = builder.build()
 
         await self._device.write(message)
+
+    async def _run_callback(self, task: Task, cb: AsyncIterable[CallbackAction]):
+        async for action in cb:
+            await self._handle_action(task, action)
+
+    async def _handle_action(self, task: Task, action) -> None:
+        match action:
+            case (CallbackAction.SEND_CHUNK, msg):
+                await self.send_chunk(task, msg)
+            case _:
+                _logger.warning("[CLIENT] unknown action: %s", action)
 
     def _validate_payload_has_data_id(self, payload: bytes) -> None:
         if len(payload) <= NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD:

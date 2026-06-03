@@ -1,8 +1,9 @@
 import asyncio
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from typing import Awaitable, Dict
+from typing import AsyncGenerator, AsyncIterable, Awaitable, Dict
 
+from .callback_actions import CallbackAction
 from elasticai.experiment_framework.remote_control.constants import (
     RESPONSE_TIMEOUT,
 )
@@ -41,11 +42,17 @@ class Task(ABC):
     def received_data(self) -> bytes:
         return bytes(self._received_data)
 
-    @abstractmethod
-    async def on_opened(self) -> None: ...
+    async def on_opened(self) -> AsyncGenerator[CallbackAction, None]:
+        return
+        yield  
+
 
     @abstractmethod
-    async def on_data_chunk_received(self) -> None: ...
+    async def on_data_chunk_received(self) -> AsyncGenerator[CallbackAction, None]:
+        return
+        yield 
 
     @abstractmethod
-    async def on_return(self) -> None: ...
+    async def on_return(self) -> AsyncGenerator[CallbackAction, None]: 
+        return
+        yield 
