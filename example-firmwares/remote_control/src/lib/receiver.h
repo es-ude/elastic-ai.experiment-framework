@@ -29,8 +29,6 @@ typedef struct
     uint8_t len_bytes[2];
 } Receiver;
 
-Frame read_frame(int socket);
-
 void process_rx(Receiver *rx);
 
 #endif

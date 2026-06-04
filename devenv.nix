@@ -80,6 +80,20 @@
     };
 
     "check:tests" = {
-    }; # this is triggered in CI with --mode before flag
+
+    };
+
+    "check:unit_tests_c" = {
+      exec = ''
+        cd example-firmwares/remote_control
+        ctest --preset unit
+      '';
+    };
+
+    "check:system_tests" = {
+      exec = ''
+        uv run python -m pytest tests
+      '';
+    };
   };
 }
