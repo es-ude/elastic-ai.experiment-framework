@@ -61,7 +61,6 @@ def test_flags_set_correctly():
         MessageBuilder()
         .set_command(Command.OPEN_TASK)
         .set_need_ack(True)
-        .set_is_last(True)
     )
 
     msg = builder.build()

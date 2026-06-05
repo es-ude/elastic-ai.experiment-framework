@@ -63,7 +63,6 @@ class TaskManager:
             data_id=data_id,
             data=data,
             need_ack=task.need_ack,
-            is_last=True,
         )
 
         if not task.need_ack:
@@ -206,7 +205,6 @@ class TaskManager:
         data_id: int = 0,
         data: bytes = b"",
         need_ack: bool = False,
-        is_last: bool = False,
     ) -> None:
         builder = (
             MessageBuilder()
@@ -216,7 +214,6 @@ class TaskManager:
             .set_data_id(data_id)
             .set_data(data)
             .set_need_ack(need_ack)
-            .set_is_last(is_last)
         )
 
         message = builder.build()

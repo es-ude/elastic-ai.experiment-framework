@@ -17,7 +17,7 @@ from elasticai.experiment_framework.remote_control.header import Header
 def test_to_bytes():
     h = Header(
         Command.ACK,
-        Flags(need_ack=True, has_crc=False, is_last=False),
+        Flags(need_ack=True, has_crc=False),
         transaction_id=100,
         payload_len=63,
     )
@@ -37,7 +37,7 @@ def test_from_bytes():
         HEADER_FORMAT,
         SYNC_BYTE,
         Command.OPEN_TASK,
-        Flags(need_ack=False, has_crc=True, is_last=True).to_byte(),
+        Flags(need_ack=False, has_crc=True).to_byte(),
         0x10,
         0x11,
     )
@@ -45,7 +45,7 @@ def test_from_bytes():
     h = Header.from_bytes(h_bytes)
 
     assert h.command == Command.OPEN_TASK
-    assert h.flags == Flags(False, True, True)
+    assert h.flags == Flags(False, True)
     assert h.transaction_id == 16
     assert h.payload_len == 17
 
@@ -55,7 +55,7 @@ def test_raise_exception_when_wrong_sync_bytes():
         HEADER_FORMAT,
         0xAB,
         Command.OPEN_TASK,
-        Flags(need_ack=False, has_crc=True, is_last=True).to_byte(),
+        Flags(need_ack=False, has_crc=True).to_byte(),
         0x10,
         0x11,
     )
@@ -68,7 +68,7 @@ def test_raise_exception_when_invalid_size():
         HEADER_FORMAT[:5],
         0xAB,
         Command.OPEN_TASK,
-        Flags(need_ack=False, has_crc=True, is_last=True).to_byte(),
+        Flags(need_ack=False, has_crc=True).to_byte(),
         0x10,
     )
     with pytest.raises(ValueError, match="too short"):
@@ -80,7 +80,7 @@ def test_raise_exception_when_invalid_transaction_id():
     with pytest.raises(ValueError, match="transaction_id"):
         Header(
             Command.ACK,
-            Flags(need_ack=True, has_crc=False, is_last=False),
+            Flags(need_ack=True, has_crc=False),
             transaction_id=1578,
             payload_len=63,
         )
@@ -91,7 +91,7 @@ def test_raise_exception_when_invalid_payload_len():
     with pytest.raises(ValueError, match="payload_len"):
         Header(
             Command.ACK,
-            Flags(need_ack=True, has_crc=False, is_last=False),
+            Flags(need_ack=True, has_crc=False),
             transaction_id=14,
             payload_len=-1,
         )

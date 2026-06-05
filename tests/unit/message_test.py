@@ -17,7 +17,7 @@ from elasticai.experiment_framework.remote_control.message import (
 def header():
     return Header(
         Command.ACK,
-        Flags(need_ack=True, has_crc=False, is_last=False),
+        Flags(need_ack=True, has_crc=False),
         transaction_id=100,
         payload_len=11,
     )

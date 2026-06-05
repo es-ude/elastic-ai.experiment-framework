@@ -15,7 +15,6 @@ class MessageBuilder:
         self.data_id = 0
         self.transaction_id = 0
         self.need_ack = False
-        self.is_last = False
 
     def set_command(self, cmd: Command) -> "MessageBuilder":
         self.command = cmd
@@ -39,10 +38,6 @@ class MessageBuilder:
 
     def set_need_ack(self, ack: bool) -> "MessageBuilder":
         self.need_ack = ack
-        return self
-
-    def set_is_last(self, is_last: bool) -> "MessageBuilder":
-        self.is_last = is_last
         return self
 
     def build(self) -> Message:
@@ -73,7 +68,7 @@ class MessageBuilder:
         return Message(
             self.command,
             data,
-            flags=Flags(need_ack=self.need_ack, is_last=self.is_last).to_byte(),
+            flags=Flags(need_ack=self.need_ack).to_byte(),
             transaction_id=self.transaction_id,
             byte_order=self.byte_order,
         )
