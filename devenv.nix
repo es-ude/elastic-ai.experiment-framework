@@ -1,32 +1,32 @@
-{
-  pkgs,
-  lib,
-  config,
-  inputs,
-  ...
-}: {
-  packages = [
-    pkgs.alejandra
-    pkgs.ruff
-    pkgs.cocogitto
-    pkgs.git-cliff
-    pkgs.cmake
-    pkgs.gcc-arm-embedded-13
-    pkgs.ninja
-    pkgs.picotool
-    pkgs.ty
-    pkgs.pyrefly
-  ];
+ {
+   pkgs,
+   lib,
+   config,
+   inputs,
+   ...
+ }: {
+   packages = [
+     pkgs.alejandra
+     pkgs.ruff
+     pkgs.cocogitto
+     pkgs.git-cliff
+     pkgs.cmake
+     pkgs.gcc-arm-embedded-13
+     pkgs.ninja
+     pkgs.picotool
+     pkgs.ty
+     pkgs.pyrefly
+   ];
 
-  languages.c.enable = true;
-  languages.cplusplus.enable = true;
-  languages.python = {
-    enable = true;
-    package = pkgs.python312;
-    uv.enable = true;
-    uv.sync.enable = true;
-    uv.sync.allExtras = true;
-  };
+   languages.c.enable = true;
+   languages.cplusplus.enable = true;
+   languages.python = {
+     enable = true;
+     package = pkgs.python312;
+     uv.enable = true;
+     uv.sync.enable = true;
+     uv.sync.allExtras = true;
+   };
 
   tasks = let
     uv_run = "${pkgs.uv}/bin/uv run";
@@ -91,13 +91,27 @@
       '';
     };
 
+    "check:unit_tests_c" = {
+      exec = ''
+        cd example-firmwares/remote_control
+        ctest --preset host-unit
+      '';
+    };
+
+    "check:system_tests" = {
+        exec = ''
+        ${uv_run} python -m pytest tests/system/test_remote_control.py -m "not hardware" -s -cli-log-level=debug
+        '';
+    };
+ 
+      
     "check:tests" = {
       exec = ''
         ${uv_run} coverage erase
-        ${uv_run} coverage run -m pytest tests/unit tests/integration
+        ${uv_run} coverage run -m pytest tests/unit tests/integration tests/system/test_remote_control.py -m "not hardware"
         ${uv_run} coverage xml -o coverage.xml
       '';
     };
 
   };
-}
+ }
