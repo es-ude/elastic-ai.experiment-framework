@@ -4,6 +4,8 @@
 #include "frame.h"
 #include "ringbuffer.h"
 #include "task_manager.h"
+#include "sender.h"
+
 #include "transport.h"
 #include "sender.h"
 
