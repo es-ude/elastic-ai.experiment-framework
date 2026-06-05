@@ -1,15 +1,14 @@
-from .vivado_synthesis import (
-    main,
-    TargetPlatforms,
-    CachedVivadoSynthesis,
-    VivadoSynthesis,
-)
-
 from .synthesis import (
     CachedSynthesis,
-    load_synthesis_config_from_env,
-    SynthesisStrategy,
     SynthesisConfig,
+    SynthesisStrategy,
+    load_synthesis_config_from_env,
+)
+from .vivado_synthesis import (
+    CachedVivadoSynthesis,
+    TargetPlatforms,
+    VivadoSynthesis,
+    main,
 )
 
 __all__ = [

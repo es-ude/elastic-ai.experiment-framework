@@ -1,14 +1,14 @@
-import logging
-import warnings
-from collections.abc import Mapping, Iterator, Iterable
-import os
 import dataclasses
+import logging
+import os
+import warnings
 from abc import abstractmethod
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from enum import StrEnum, auto
-from pathlib import Path
-from typing import Protocol, Self, runtime_checkable, override
 from hashlib import blake2s
+from pathlib import Path
+from typing import Protocol, Self, override, runtime_checkable
 
 
 class TargetPlatforms(StrEnum):
@@ -35,20 +35,24 @@ class SynthesisStrategy[S: SynthesisConfig](Protocol):
 
     @abstractmethod
     def set_config(self, config: SynthesisConfig) -> Self:
-        """Will try to infer missing fields from environment variables using `load_synthesis_config_from_env`."""
+        """Will try to infer missing fields from environment variables.
+
+        Uses `load_synthesis_config_from_env`.
+        """
         ...
 
     @abstractmethod
     def synthesize(
         self, src_dir: Path | str, out_path: Path | str | None = None
     ) -> Path:
-        """run synthesis with files in src_dir and save the results in out_path, returns the resulting out_path.
+        """Run synthesis with files in src_dir and save the results in
+        out_path. Returns the resulting out_path.
 
         If out_path is not specified, the result is stored in a sibling
-        folder of src_dir, called `synthesis_result.tar.gz`.
+        folder of src_dir called `synthesis_result.tar.gz`.
 
-        If out_path is ends with .tar.gz or .zip it will be stored in the
-        corresponding archive if supported or raise an error otherwise.
+        If out_path ends with .tar.gz or .zip it will be stored in the
+        corresponding archive if supported, otherwise an error is raised.
         """
         ...
 
@@ -83,7 +87,9 @@ class CachedSynthesis[S: SynthesisConfig](SynthesisStrategy):
         out_path: Path | str | None = None,
         cache_dir: str | Path = "$XDG_CACHE_HOME/eaixp/synthesis/",
     ) -> Path:
-        """Cache synthesis results and create a symlink to the cache hit at `out_path`."""
+        """Cache synthesis results and create a symlink to the cache
+        hit at `out_path`.
+        """
         src_dir = Path(src_dir)
         digest = self._compute_hash(src_dir)
         cache_dir = self._normalize_cache_dir(cache_dir)
@@ -92,7 +98,7 @@ class CachedSynthesis[S: SynthesisConfig](SynthesisStrategy):
         digest_dir.parent.mkdir(exist_ok=True)
 
         if not digest_dir.exists() or len(list(digest_dir.iterdir())) == 0:
-            self._logger.info("cache miss -> run synthesis...")
+            self._logger.debug("[CLIENT] cache miss -> run synthesis...")
             target = digest_dir
             if str(out_path).endswith(".tar.gz"):
                 target = digest_dir / "synthesis_result.tar.gz"
@@ -155,7 +161,8 @@ def load_synthesis_config_from_env[T: SynthesisConfig](
 ) -> T:
     """Create a SynthesisConfig from a mapping or current environment variables.
 
-    Instead of specifying `env` explicitly just use the concrete type to construct your object.
+    Instead of specifying `env` explicitly just use the concrete type to
+    construct your object.
 
     Example for environemnt variables
 
