@@ -9,7 +9,7 @@
 #define MAX_TASKS 32
 #define QUEUE_TASK_LEN 16
 
-void init_tasks();
+void init_tasks(RingBuffer *outgoing_rb);
 void enqueue_task(RingBuffer *rb, Task *task);
 Task *dequeue_task();
 // int prepare_task(Frame *frame, uint8_t server_fd, uint8_t client_fd);

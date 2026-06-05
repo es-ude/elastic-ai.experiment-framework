@@ -5,6 +5,8 @@
 #include <stdbool.h>
 
 #include "frame.h"
+#include "transport.h"
+#include "ringbuffer.h"
 
 typedef struct Task Task;
 
@@ -30,6 +32,7 @@ struct Task
     uint8_t output_data[TASK_BUFFER_LEN_BYTE];
     uint32_t output_data_len;
 
+    RingBuffer *outgoing_rb; // for sending data back to client
     uint8_t fn_id;
     void (*run)(Task *task);
 };

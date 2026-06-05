@@ -69,11 +69,12 @@ void handle_incoming_frame(RingBuffer *task_rb, Frame *frame)
 {
     int associated_transaction_id = 0, result_code = 0;
 
-    printf("\n[Server] Received frame \n Control Byte: %02X, Type: %02X, Msg ID: %02X, "
+    printf("\n[Server] Received frame \n Control Byte: %02X, Type: %02X, Transaction ID: %02X, "
            "Payload Len: %d\n\n",
            frame->header.start_byte, frame->header.message_type,
            frame->header.transaction_id, frame->header.payload_len);
     print_payload(frame->payload, frame->header.payload_len);
+    fflush(stdout);
 
     // Call differenet message handler
     switch (frame->header.message_type)

@@ -15,7 +15,7 @@ static Task task_pool[MAX_TASKS] = {0}; // Support up to MAX_TASKS concurrent ta
 static uint8_t free_tasks = MAX_TASKS;
 
 // Initialize the task management system
-void init_tasks(void)
+void init_tasks(RingBuffer *outgoing_rb)
 {
     for (int i = 0; i < MAX_TASKS; i++)
     {
@@ -26,6 +26,7 @@ void init_tasks(void)
         memset(task_pool[i].output_data, 0, TASK_BUFFER_LEN_BYTE);
         task_pool[i].output_data_len = 0;
         task_pool[i].fn_id = 0;
+        task_pool[i].outgoing_rb = outgoing_rb;
     }
 }
 

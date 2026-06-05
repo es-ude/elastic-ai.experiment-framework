@@ -67,7 +67,7 @@ void test_process_rx_detects_complete_frame(void)
         0x01,       // type
         0x00,       // flags
         0x42,       // tx id
-        0x00, 0x03, // payload len = 3
+        0x03, 0x00, // payload len = 3
         0x11,
         0x22,
         0x33};
