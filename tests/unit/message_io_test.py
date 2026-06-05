@@ -1,16 +1,11 @@
-from typing import Self
 import pytest
 
 from elasticai.experiment_framework.remote_control.commands import Command
 from elasticai.experiment_framework.remote_control.io_stream import IOStream
 from elasticai.experiment_framework.remote_control.message import Message
-from elasticai.experiment_framework.remote_control.message_builder import MessageBuilder
-from elasticai.experiment_framework.remote_control.message_io import MessageIO
-
-
-@pytest.fixture
-def get_flash_chunk_size_msg():
-    return b"\x03\x00\x00\x00\x04\x00\x00\x02\x00\x05"
+from elasticai.experiment_framework.remote_control.message_io import (
+    MessageIO,
+)
 
 
 class DummyIO(IOStream):
@@ -19,56 +14,60 @@ class DummyIO(IOStream):
         self.current_read_pos = 0
         self.rx = bytearray()
 
-    def read(self, num_bytes: int) -> bytes | bytearray:
+    async def read(self, num_bytes: int) -> bytes | bytearray:
         old_pos = self.current_read_pos
         self.current_read_pos += num_bytes
         v = self.tx[old_pos : self.current_read_pos]
         return v
 
-    def write(self: Self, data: bytes | bytearray) -> int:
+    async def write(self, data: bytes | bytearray) -> int:
         self.rx.extend(data)
         return len(data)
 
 
 @pytest.fixture
-def dummy():
-    return DummyIO()
+def msg():
+    return "Hello World"
 
 
 @pytest.fixture
-def msg_builder():
-    return MessageBuilder()
+def data_chunk(msg):
+    return Message(Command.DATA_CHUNK, msg.encode())
 
 
 @pytest.fixture
-def ack(msg_builder):
-    b = msg_builder
-    b.command = Command.ACK
-    return next(iter(b.build()))
+def ack():
+    return Message(Command.ACK, b"")
 
 
 @pytest.fixture
-def nak(msg_builder):
-    b = msg_builder
-    b.command = Command.NAK
-    return next(iter(b.build()))
+def ret():
+    return Message(Command.RETURN, b"0")
 
 
 @pytest.fixture
-def cut(dummy, ack, nak):
-    return MessageIO(io_stream=dummy, ack=ack, nak=nak, byte_order="big", max_trials=2)
+def message_io():
+    return MessageIO(DummyIO())
 
 
-def test_GET_FLASH_CHUNK_SIZE_is_acknowledged(
-    get_flash_chunk_size_msg: bytes, cut: MessageIO, ack: Message, dummy: DummyIO
-):
-    dummy.tx.extend(get_flash_chunk_size_msg)
-    dummy.tx.extend(ack.to_bytes())
-    cut.read()
-    assert dummy.rx == ack.to_bytes()
+class TestBasic:
+    @pytest.mark.asyncio
+    async def test_read_message_frame(self, message_io, data_chunk):
 
+        message_io._stream.tx.extend(data_chunk.to_bytes())
+        msg = await message_io.read()
 
-def test_ACK_is_not_acknowledged(ack: Message, cut: MessageIO, dummy: DummyIO):
-    dummy.tx.extend(ack.to_bytes())
-    cut.read()
-    assert len(dummy.rx) == 0
+        assert msg == data_chunk
+
+    @pytest.mark.asyncio
+    async def test_write_message(self, message_io, ret):
+        await message_io.write(ret)
+
+        assert message_io._stream.rx == ret.to_bytes()
+
+    @pytest.mark.asyncio
+    async def test_round_trip(self, message_io, data_chunk):
+        await message_io.write(data_chunk)
+        message_io._stream.tx.extend(message_io._stream.rx)
+        msg = await message_io.read()
+        assert msg == data_chunk
