@@ -1,0 +1,33 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "debug",
+      "displayName": "Debug Build",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    }
+  ],
+
+  "buildPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug"
+    }
+    
+  ],
+
+  "testPresets": [
+    {
+      "name": "unit",
+      "configurePreset": "debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+
+  ]
+}
