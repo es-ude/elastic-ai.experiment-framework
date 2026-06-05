@@ -48,7 +48,7 @@ int main(void)
 
     while (1)
     {
-        process_rx(&receiver);
+        process_rx(&receiver, &sender);
 
         process_tasks(&task_rb, &outgoing_rb);
 

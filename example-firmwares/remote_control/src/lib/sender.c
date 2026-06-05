@@ -56,6 +56,61 @@ void tx_process(Sender *tx)
     }
 }
 
+void add_to_unacked(Sender *tx, Frame *frame)
+{
+    for (int i = 0; i < UNACKED_MSG_MAX_AMOUNT; i++)
+    {
+        if (!tx_trackers[i].used)
+        {
+            tx_trackers[i].used = 1;
+            tx_trackers[i].seq = frame->header.transaction_id;
+            tx_trackers[i].frame = *frame;
+            tx_trackers[i].last_sent_ms = 0; // Set to current time in ms
+            tx_trackers[i].retry_count = 0;
+            tx_trackers[i].state = STATE_SENT;
+            break;
+        }
+    }
+}
+
+void on_ack(uint8_t transaction_id)
+{
+    for (int i = 0; i < UNACKED_MSG_MAX_AMOUNT; i++)
+    {
+        if (tx_trackers[i].used && tx_trackers[i].seq == transaction_id)
+        {
+            tx_trackers[i].used = 0;
+            break;
+        }
+    }
+}
+
+void on_nack(Sender *tx, uint8_t transaction_id)
+{
+    for (int i = 0; i < UNACKED_MSG_MAX_AMOUNT; i++)
+    {
+        if (tx_trackers[i].used && tx_trackers[i].seq == transaction_id)
+        {
+            // Handle NACK (e.g., retry sending the frame)
+            TxTracker *entry = &tx_trackers[i];
+
+            if (entry->retry_count < MAX_RETRY_COUNT) // Max retry count
+            {
+                entry->retry_count++;
+                entry->last_sent_ms = 0;                         // Reset to current time in ms
+                entry->state = STATE_SENT;                       // Mark for retry
+                ringbuffer_push(tx->outgoing_rb, &entry->frame); // Re-queue the frame for sending
+            }
+            else
+            {
+                entry->state = STATE_FAILED;
+                entry->used = 0;
+            }
+            return;
+        }
+    }
+}
+
 void process_tx(Sender *tx)
 {
     tx->transport = tx->transport;
@@ -66,9 +121,12 @@ void process_tx(Sender *tx)
 
         if (ringbuffer_pop(tx->outgoing_rb, &frame))
         {
-            tx_start(tx, &frame);
+            if (frame.header.flags & FLAG_NEED_ACK)
+            {
+                add_to_unacked(tx, &frame);
+            }
+            tx_start(tx, &frame); // start the parsing of the frame and sending it out
         }
     }
-
     tx_process(tx);
 }
