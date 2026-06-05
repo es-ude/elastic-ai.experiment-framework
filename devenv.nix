@@ -80,7 +80,9 @@
     };
 
     "check:tests" = {
-
+      exec = ''
+      ${uv_run} python -m pytest tests/unit tests/integration tests/system/send_receive_python_and_c_test.py -s
+      '';
     };
 
     "check:unit_tests_c" = {
@@ -89,11 +91,6 @@
         ctest --preset unit
       '';
     };
-
-    "check:system_tests" = {
-      exec = ''
-        uv run python -m pytest tests
-      '';
-    };
+      
   };
 }

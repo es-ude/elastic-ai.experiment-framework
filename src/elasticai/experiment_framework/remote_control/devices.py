@@ -1,10 +1,12 @@
+from abc import abstractmethod
 from collections.abc import Generator
 from contextlib import contextmanager
-from abc import abstractmethod
-from typing import Protocol, cast
-from serial.tools import list_ports
 from dataclasses import dataclass
+from typing import Protocol, cast
+
 from serial import Serial as _Serial
+from serial.tools import list_ports
+
 from .io_stream import IOStream
 
 
@@ -47,10 +49,10 @@ class _SerialIOStream(IOStream):
     def __init__(self, _serial: _Serial):
         self._serial = _serial
 
-    def write(self, data: bytes | bytearray, /) -> int:
+    async def write(self, data: bytes | bytearray, /) -> int:
         return cast(int, self._serial.write(data))
 
-    def read(self, num_bytes: int, /) -> bytes:
+    async def read(self, num_bytes: int, /) -> bytes:
         return self._serial.read(num_bytes)
 
 
