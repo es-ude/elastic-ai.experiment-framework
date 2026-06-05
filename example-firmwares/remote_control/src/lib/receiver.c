@@ -1,5 +1,4 @@
 #include "receiver.h"
-#include "sender.h"
 #include "msg_handler.h"
 
 #include <stdlib.h>
@@ -82,7 +81,7 @@ bool frame_parser_feed(Receiver *p, uint8_t byte)
     return false;
 }
 
-void process_rx(Receiver *rx, TaskManager *task_manager)
+void process_rx(Receiver *rx, TaskManager *task_manager, Sender *tx)
 {
     uint8_t byte;
 
@@ -94,7 +93,7 @@ void process_rx(Receiver *rx, TaskManager *task_manager)
         {
             Frame frame = rx->frame;
 
-            handle_incoming_frame(rx->task_rb, &frame, task_manager);
+            handle_incoming_frame(rx->task_rb, &frame, task_manager, tx);
 
             rx->state = WAIT_START;
         }

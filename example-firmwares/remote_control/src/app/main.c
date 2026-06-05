@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
     fflush(stdout);
     while (1)
     {
-        process_rx(&receiver, &task_manager);
+        process_rx(&receiver, &task_manager, &sender);
 
         process_tasks(&task_rb, &outgoing_rb, &task_manager);
 

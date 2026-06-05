@@ -136,13 +136,33 @@ void test_msg_data_chunk_routes_to_task(void)
     TEST_ASSERT_EQUAL(1, fake_called);
 }
 
+void test_ack(void)
+{
+    Frame f = make_frame(OPEN_TASK, 3, FLAG_NEED_ACK, 0x00);
+
+    handle_incoming_frame(&task_rb, &f, &task_manager, &tx);
+
+    TEST_ASSERT_TRUE(ringbuffer_size(&out_rb) > 0);
+    TEST_ASSERT_EQUAL(ACK, ((Frame *)out_rb.buffer)[0].header.message_type);
+}
+
+void test_nack(void)
+{
+    Frame f = make_frame(DATA_CHUNK, 16, FLAG_NEED_ACK, 0x00);
+
+    handle_incoming_frame(&task_rb, &f, &task_manager, &tx);
+
+    TEST_ASSERT_TRUE(ringbuffer_size(&out_rb) > 0);
+    TEST_ASSERT_EQUAL(NACK, ((Frame *)out_rb.buffer)[0].header.message_type);
+}
+
 /* -------- UNKNOWN MESSAGE -------- */
 
 void test_handle_incoming_frame_unknown_type_does_not_crash(void)
 {
     Frame f = make_frame(0xFF, 0, 0, 0x00);
 
-    handle_incoming_frame(&task_rb, &f, &task_manager);
+    handle_incoming_frame(&task_rb, &f, &task_manager, &tx);
 
     TEST_ASSERT_EQUAL(0, ringbuffer_size(&task_rb));
 }
@@ -190,5 +210,7 @@ int main(void)
     RUN_TEST(test_handle_incoming_frame_unknown_type_does_not_crash);
     RUN_TEST(test_msg_data_chunk_invalid_task);
     RUN_TEST(test_close_task);
+    RUN_TEST(test_ack);
+    RUN_TEST(test_nack);
     return UNITY_END();
 }
