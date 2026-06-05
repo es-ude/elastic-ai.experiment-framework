@@ -181,6 +181,26 @@ void test_bidirectional_communication(void)
     TEST_ASSERT_EQUAL_UINT8(0x55, r);
 }
 
+void test_server_receives_x_bytes_from_client(void)
+{
+    printf("Starting task4\n");
+    fflush(stdout);
+    uint8_t bytes_to_send[] = {0x01, 0x02, 0x03, 0x04, 0x05};
+
+    for (size_t i = 0; i < sizeof(bytes_to_send); i++)
+    {
+        client_send(client_sock, bytes_to_send[i]);
+    }
+
+    for (size_t i = 0; i < sizeof(bytes_to_send); i++)
+    {
+        uint8_t b = server->recv_byte(server);
+        TEST_ASSERT_EQUAL_UINT8(bytes_to_send[i], b);
+        printf("received byte %x\n", b);
+        fflush(stdout);
+    }
+}
+
 /* =========================
  * MAIN
  * ========================= */
@@ -194,6 +214,8 @@ int main(void)
     RUN_TEST(test_server_sends_byte_to_client);
     sleep(1);
     RUN_TEST(test_bidirectional_communication);
+
+    RUN_TEST(test_server_receives_x_bytes_from_client);
 
     return UNITY_END();
 }

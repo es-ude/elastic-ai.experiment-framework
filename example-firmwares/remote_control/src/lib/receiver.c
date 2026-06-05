@@ -30,32 +30,35 @@ bool frame_parser_feed(Receiver *p, uint8_t byte)
 
     case WAIT_TX_ID:
         p->frame.header.transaction_id = byte;
-        p->state = WAIT_LEN_H;
-        break;
-
-    case WAIT_LEN_H:
-        p->len_bytes[0] = byte;
         p->state = WAIT_LEN_L;
         break;
 
     case WAIT_LEN_L:
+        p->len_bytes[0] = byte;
+        p->state = WAIT_LEN_H;
+        break;
+
+    case WAIT_LEN_H:
     {
         p->len_bytes[1] = byte;
 
-        uint16_t len =
-            ((uint16_t)p->len_bytes[0] << 8) |
-            (uint16_t)p->len_bytes[1];
+        uint16_t len = PARSE_UINT16(p->len_bytes[0], p->len_bytes[1]);
 
         p->frame.header.payload_len = len;
 
         if (len > MAX_PAYLOAD)
         {
-            p->state = WAIT_START; // invalid frame
+            p->state = WAIT_START;
             break;
         }
 
         p->index = 0;
         p->state = WAIT_PAYLOAD;
+        printf("LEN BYTES: %02X %02X -> LEN=%u\n",
+               p->len_bytes[1],
+               p->len_bytes[0],
+               p->frame.header.payload_len);
+
         break;
     }
 
@@ -74,24 +77,14 @@ bool frame_parser_feed(Receiver *p, uint8_t byte)
     return false;
 }
 
-void receive_byte(Receiver *rx)
-{
-    uint8_t byte = rx->transport->recv_byte(rx->transport);
-    ringbuffer_push(rx->incoming_rb, &byte);
-}
-
-// Receive one Byte
-void RX_ISR(Receiver *rx)
-{
-    receive_byte(rx);
-}
-
 void process_rx(Receiver *rx)
 {
     uint8_t byte;
 
     while (ringbuffer_pop(rx->incoming_rb, &byte))
     {
+        printf("[Receiver] Current state: %d, Received byte: 0x%02X\n", rx->state, byte);
+
         if (frame_parser_feed(rx, byte))
         {
             Frame frame = rx->frame;

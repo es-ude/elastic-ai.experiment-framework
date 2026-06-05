@@ -40,13 +40,16 @@ target_include_directories(remote_core PUBLIC
 option(USE_SOCKET "Use socket transport" ON)
 
 if(USE_SOCKET)
-    add_library(remote_transport STATIC ${SRC_TRANSPORT}/sockets.c)
+    add_library(remote_transport STATIC 
+    ${SRC_TRANSPORT}/sockets.c )
 else()
-    add_library(remote_transport STATIC ${SRC_TRANSPORT}/uart.c)
+    add_library(remote_transport STATIC 
+    ${SRC_TRANSPORT}/uart.c)
 endif()
 
 target_include_directories(remote_transport PUBLIC
     ${SRC_TRANSPORT}
+    ${SRC_LIB}
 )
 
 # =========================

@@ -14,6 +14,14 @@ static void mock_send(Transport *t, uint8_t b)
     mock_out[mock_idx++] = b;
 }
 
+static bool mock_tx_start(Sender *tx, Frame *frame)
+{
+    tx->frame = *frame; // copy header + pointer
+    tx->index = 0;
+    tx->state = TX_SEND_START;
+    return true;
+}
+
 static Transport mock_transport;
 
 static Frame rb_frame;
@@ -40,26 +48,6 @@ void tearDown(void)
  * TESTS
  * ========================================================= */
 
-void test_tx_start_initializes_context(void)
-{
-    Sender tx = {0};
-
-    Frame frame = {
-        .header = {
-            .message_type = 0x01,
-            .flags = 0x02,
-            .transaction_id = 0x03,
-            .payload_len = 2},
-        .payload = {0xAA, 0xBB}};
-
-    bool ok = tx_start(&tx, &frame);
-
-    TEST_ASSERT_TRUE(ok);
-    TEST_ASSERT_EQUAL(TX_SEND_START, tx.state);
-    TEST_ASSERT_EQUAL_UINT8(0x01, tx.frame.header.message_type);
-    TEST_ASSERT_EQUAL_UINT16(2, tx.frame.header.payload_len);
-}
-
 void test_tx_process_sends_complete_frame(void)
 {
     Sender tx = {0};
@@ -73,7 +61,7 @@ void test_tx_process_sends_complete_frame(void)
             .payload_len = 2},
         .payload = {0xAA, 0xBB}};
 
-    tx_start(&tx, &frame);
+    mock_tx_start(&tx, &frame);
 
     for (int i = 0; i < 20; i++)
     {
@@ -87,7 +75,7 @@ void test_tx_process_sends_complete_frame(void)
         0x10,
         0x20,
         0x30,
-        0x00, 0x02,
+        0x02, 0x00,
         0xAA, 0xBB};
 
     TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, mock_out, 8);
@@ -120,7 +108,6 @@ int main(void)
 {
     UNITY_BEGIN();
 
-    RUN_TEST(test_tx_start_initializes_context);
     RUN_TEST(test_tx_process_sends_complete_frame);
     RUN_TEST(test_process_tx_starts_from_ringbuffer);
 

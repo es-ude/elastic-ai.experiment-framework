@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ringbuffer.h"
+
 #include <stdint.h>
 #include <stddef.h>
 
@@ -27,6 +29,8 @@ typedef struct
         } socket;
     } cfg;
 
+    RingBuffer *incoming_rb; // for recv_byte to push into
+
 } TransportConfig;
 
 struct Transport
@@ -35,8 +39,8 @@ struct Transport
     uint8_t (*recv_byte)(Transport *self);
     void (*destroy)(Transport *self);
 
+    RingBuffer *incoming_rb; // for recv_byte to push into
     uint8_t impl[32];
 };
 
 void transport_init(Transport *buf, TransportConfig cfg);
-void transport_accept(Transport *t);

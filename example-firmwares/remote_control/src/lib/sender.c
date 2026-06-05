@@ -32,8 +32,8 @@ void tx_process(Sender *tx)
         send_byte(tx, tx->frame.header.flags);
         send_byte(tx, tx->frame.header.transaction_id);
 
-        send_byte(tx, (tx->frame.header.payload_len >> 8) & 0xFF);
         send_byte(tx, tx->frame.header.payload_len & 0xFF);
+        send_byte(tx, (tx->frame.header.payload_len >> 8) & 0xFF);
 
         tx->state = TX_SEND_PAYLOAD;
         tx->index = 0;

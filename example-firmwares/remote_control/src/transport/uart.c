@@ -34,3 +34,9 @@ void transport_init(Transport *buf, TransportConfig cfg)
     buf->recv_byte = uart_recv;
     buf->destroy = uart_destroy;
 }
+
+void transport_accept(Transport *t)
+{
+    (void)t;
+    // uart_wait_for_connection(u->fd);
+}

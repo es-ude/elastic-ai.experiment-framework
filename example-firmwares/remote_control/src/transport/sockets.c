@@ -5,6 +5,9 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <stdio.h>
+#include <pthread.h>
+#include <errno.h>
+#include <string.h>
 
 typedef struct
 {
@@ -12,9 +15,73 @@ typedef struct
     int clientfd;
 } SocketImpl;
 
+static pthread_t recv_thread;
+
+static void *socket_receive_thread(void *t)
+{
+    Transport *transport = (Transport *)t;
+    SocketImpl *s = (SocketImpl *)transport->impl;
+
+    s->clientfd = -1;
+    while (1)
+    {
+        // =========================
+        // 1. WAIT FOR CONNECTION
+        // =========================
+        if (s->clientfd < 0)
+        {
+            s->clientfd = accept(s->listenfd, NULL, NULL);
+
+            if (s->clientfd < 0)
+            {
+                perror("accept");
+                sleep(1);
+                continue;
+            }
+
+            printf("[Server] Client connected!\n");
+        }
+
+        // =========================
+        // 2. RECEIVE LOOP
+        // =========================
+        uint8_t b;
+        ssize_t n = recv(s->clientfd, &b, 1, 0);
+
+        // printf("recv n=%ld errno=%d\n", n, errno);
+
+        if (n > 0)
+        {
+            // printf("[Server] Received byte: 0x%02X\n", b);
+
+            ringbuffer_push(transport->incoming_rb, &b);
+            continue;
+        }
+
+        // =========================
+        // 3. DISCONNECT HANDLING
+        // =========================
+        if (n == 0)
+        {
+            printf("[Server] Client disconnected\n");
+        }
+        else
+        {
+            printf("[Server] recv error: %s\n", strerror(errno));
+        }
+
+        close(s->clientfd);
+        s->clientfd = -1;
+    }
+
+    return NULL;
+}
+
 static void socket_send(Transport *t, uint8_t b)
 {
     SocketImpl *s = (SocketImpl *)t->impl;
+
+    printf("[Server] Sending byte: 0x%02X\n", b);
     send(s->clientfd, &b, 1, 0);
 }
 
@@ -33,6 +100,8 @@ static void socket_destroy(Transport *t)
 
     close(s->clientfd);
     close(s->listenfd);
+
+    pthread_cancel(recv_thread);
 }
 
 void transport_init(Transport *buf, TransportConfig cfg)
@@ -73,17 +142,12 @@ void transport_init(Transport *buf, TransportConfig cfg)
     t->send_byte = socket_send;
     t->recv_byte = socket_recv;
     t->destroy = socket_destroy;
-}
 
-void transport_accept(Transport *t)
-{
-    SocketImpl *s = (SocketImpl *)t->impl;
-    s->clientfd = accept(s->listenfd, NULL, NULL);
-    if (s->clientfd < 0)
+    t->incoming_rb = cfg.incoming_rb;
+    if (pthread_create(&recv_thread, NULL, socket_receive_thread, t) != 0)
     {
-        perror("accept");
+        perror("pthread_create");
         close(s->listenfd);
         return;
     }
-    printf("connected clientfd = %d\n", s->clientfd);
 }

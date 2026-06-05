@@ -45,7 +45,7 @@ void setUp(void)
     ringbuffer_init(&task_rb, rb_storage, RB_CAPACITY, sizeof(Task *));
     ringbuffer_init(&out_rb, out_storage, RB_CAPACITY, sizeof(Frame));
 
-    init_tasks(); // global task pool reset
+    init_tasks(&out_rb); // global task pool reset
 }
 
 void tearDown(void)

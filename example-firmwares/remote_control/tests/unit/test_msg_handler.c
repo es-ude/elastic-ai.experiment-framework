@@ -31,9 +31,11 @@ static Frame make_frame(uint8_t type, uint8_t tx_id, uint8_t flags, uint8_t payl
  * SETUP
  * ========================= */
 
+RingBuffer out_rb;
+
 void setUp(void)
 {
-    init_tasks();
+    init_tasks(&out_rb);
 }
 
 void tearDown(void)
@@ -129,7 +131,7 @@ int main(void)
 
     RUN_TEST(test_msg_open_task_creates_task);
     RUN_TEST(test_msg_data_chunk_routes_to_task);
-    //  RUN_TEST(test_handle_incoming_frame_unknown_type_does_not_crash);
-    //  RUN_TEST(test_msg_data_chunk_invalid_task);
+    RUN_TEST(test_handle_incoming_frame_unknown_type_does_not_crash);
+    RUN_TEST(test_msg_data_chunk_invalid_task);
     return UNITY_END();
 }
