@@ -17,7 +17,7 @@ static RingBuffer outgoing_rb;
 static RingBuffer task_rb;
 
 static uint8_t incoming_storage[INCOMING_BUFFER_SIZE];
-static Frame outgoing_storage[OUTGOING_BUFFER_SIZE];
+static OutgoingOrder outgoing_storage[OUTGOING_BUFFER_SIZE];
 static Task *task_storage[TASK_BUFFER_SIZE];
 
 static Receiver receiver;
@@ -31,7 +31,7 @@ int main(int argc, char *argv[])
 {
 
     ringbuffer_init(&incoming_rb, incoming_storage, INCOMING_BUFFER_SIZE, sizeof(uint8_t));
-    ringbuffer_init(&outgoing_rb, outgoing_storage, OUTGOING_BUFFER_SIZE, sizeof(Frame));
+    ringbuffer_init(&outgoing_rb, outgoing_storage, OUTGOING_BUFFER_SIZE, sizeof(OutgoingOrder));
     ringbuffer_init(&task_rb, task_storage, TASK_BUFFER_SIZE, sizeof(Task *));
 
     init_task_manager(&outgoing_rb, &task_manager); // Initialize task manager with outgoing ring buffer for sending responses

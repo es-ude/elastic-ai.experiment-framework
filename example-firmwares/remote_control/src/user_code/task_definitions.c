@@ -27,6 +27,18 @@ void func1(TaskContext *task_context)
     char *msg = "func1 called";
 }
 
+void request_ack_from_pc(TaskContext *task_context)
+{
+    char *msg = "test data";
+
+    task_context->task_services.send_data(&task_context->task_services, FLAG_NEED_ACK, (uint8_t *)msg, strlen(msg));
+}
+
+void fast_setup_ack_from_pc(TaskContext *task_context)
+{
+    request_ack_from_pc(task_context);
+}
+
 // Contains the functions that should be callable from the client_protocol via execute_function,
 // position determines function_id
 
@@ -36,7 +48,10 @@ static TaskDefinition task_definition_table[] = {
      .handle = send_mirror_reply},
     {.setup = default_setup,
      .tear_down = default_teardown,
-     .handle = func1}};
+     .handle = func1},
+    {.setup = default_setup,
+     .handle = request_ack_from_pc,
+     .tear_down = default_teardown}};
 
 static UserTasks user_task_defintions = {.task_definitions = task_definition_table,
                                          .size = sizeof(task_definition_table)};
