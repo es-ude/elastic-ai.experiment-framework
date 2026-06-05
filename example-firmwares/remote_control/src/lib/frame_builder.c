@@ -78,20 +78,6 @@ int frame_builder_data_chunk(Frame *frame, uint8_t flags, uint8_t *data, uint16_
     return amount_chunks;
 }
 
-int frame_builder_ack(Frame *frame, uint8_t transaction_id, uint8_t data_id)
-{
-    *frame = (Frame){
-        .header = {
-            .start_byte = 0xAA,
-            .message_type = ACK,
-            .flags = 0,
-            .payload_len = 1,
-            .transaction_id = transaction_id},
-        .payload[0] = data_id};
-
-    return 0;
-}
-
 int frame_builder_nack(Frame *frame, uint8_t transaction_id, uint8_t data_id)
 {
     *frame = (Frame){
@@ -99,9 +85,23 @@ int frame_builder_nack(Frame *frame, uint8_t transaction_id, uint8_t data_id)
             .start_byte = 0xAA,
             .message_type = NACK,
             .flags = 0,
-            .payload_len = 1,
-            .transaction_id = transaction_id},
-        .payload[0] = data_id};
+            .msg_id = data_id,
+            .payload_len = 0,
+            .transaction_id = transaction_id}};
+
+    return 0;
+}
+
+int frame_builder_ack(Frame *frame, uint8_t transaction_id, uint8_t data_id)
+{
+    *frame = (Frame){
+        .header = {
+            .start_byte = 0xAA,
+            .message_type = ACK,
+            .flags = 0,
+            .msg_id = data_id,
+            .payload_len = 0,
+            .transaction_id = transaction_id}};
 
     return 0;
 }

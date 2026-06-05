@@ -55,7 +55,7 @@ int msg_data_chunk(RingBuffer *task_rb, Frame *frame, TaskManager *task_manager)
     if (task == NULL || task->status == TASK_STATUS_IDLE)
     {
         printf("Invalid task ID in data chunk: %d\n", frame->header.transaction_id);
-        return -1; // Invalid task ID
+        return -1; // Invalid task ID. send back nack
     }
     printf("[Server] Fetched Task with id %i\n", frame->header.transaction_id);
 
@@ -63,17 +63,16 @@ int msg_data_chunk(RingBuffer *task_rb, Frame *frame, TaskManager *task_manager)
     return task->id;
 }
 
-/*
- * Handles the frame interpreation.
- *  Return code:
- *          @param 0 no frame should be sent back
- *          @param 1 send the "response" frame
- *          @param 2 Connection Close Frame
- *          @param -1 error code
- */
 void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_manager, Sender *tx)
 {
-    int associated_transaction_id = 0, result_code = 0;
+    int associated_transaction_id = 0;
+    enum
+    {
+        SEND_ACK,
+        SEND_NACK,
+    } ack_type = SEND_ACK;
+
+    bool need_ack = (frame->header.flags & FLAG_NEED_ACK) != 0;
 
     printf("\n[Server] Received frame \n Control Byte: %02X, Type: %02X, Transaction ID: %02X, "
            "Payload Len: %d\n\n",
@@ -90,12 +89,22 @@ void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_
 
         associated_transaction_id = msg_open_task(frame, task_manager);
 
-        result_code = 0; // Send return frame back
+        tx->msg_counter[frame->header.transaction_id] = 0; // reset msg_id of outgoing messages. 0 is open task, 1 is following
+        if (associated_transaction_id < 0)
+        {
+            printf("[Server] Failed to open task for transaction ID: 0x%02X\n", frame->header.transaction_id);
+            ack_type = SEND_NACK; // Send nack back
+        }
 
         tx->msg_counter[frame->header.transaction_id] = 0; // reset msg_id of outgoing messages. 0 is open task, 1 is following
         break;
     case CLOSE_TASK:
         associated_transaction_id = msg_close_task(frame, task_manager);
+        if (associated_transaction_id < 0)
+        {
+            printf("[Server] Failed to close task for transaction ID: 0x%02X\n", frame->header.transaction_id);
+            ack_type = SEND_NACK; // Send nack back
+        }
         break;
     case RETURN:
         msg_return(frame);
@@ -104,10 +113,18 @@ void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_
         printf("[Server] Handling DATA_CHUNK message\n");
         associated_transaction_id = msg_data_chunk(task_rb, frame, task_manager);
 
+        if (associated_transaction_id < 0)
+        {
+            printf("[Server] Failed to process data chunk for transaction ID: 0x%02X\n", frame->header.transaction_id);
+            ack_type = SEND_NACK; // Send nack back
+        }
+
         break;
     case ACK:
+        on_ack(tx, frame->header.msg_id);
         break;
     case NACK:
+        on_nack(tx, frame->header.msg_id);
         break;
     case HANDSHAKE:
 
@@ -115,7 +132,33 @@ void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_
 
     default:
         printf("Unknown message type: %02X\n", frame->header.message_type);
-        result_code = -2; // Unknown message type
+        ack_type = SEND_NACK; // Unknown message type
         break;
+    }
+
+    if (need_ack)
+    {
+        printf("[Receiver] ACK requested for transaction ID: 0x%02X\n", frame->header.transaction_id);
+
+        uint8_t data_id = frame->header.message_type;
+        if (frame->header.message_type == DATA_CHUNK)
+        {
+            data_id = frame->payload[0]; // For data chunks, the data ID is in the first byte of the payload
+        }
+
+        Frame ack_frame = {0};
+        if (ack_type == SEND_ACK)
+        {
+            frame_builder_ack(&ack_frame, frame->header.transaction_id, data_id);
+        }
+        else
+        {
+            frame_builder_nack(&ack_frame, frame->header.transaction_id, data_id);
+        }
+        OutgoingOrder order = {
+            .frame = ack_frame,
+            .is_retransmit = 0};
+
+        ringbuffer_push(tx->outgoing_rb, &order);
     }
 }
