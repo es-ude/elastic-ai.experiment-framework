@@ -80,6 +80,17 @@
     };
 
     "check:tests" = {
-    }; # this is triggered in CI with --mode before flag
+      exec = ''
+      ${uv_run} python -m pytest tests/unit tests/integration tests/system/send_receive_python_and_c_test.py -s
+      '';
+    };
+
+    "check:unit_tests_c" = {
+      exec = ''
+        cd example-firmwares/remote_control
+        ctest --preset unit
+      '';
+    };
+      
   };
 }
