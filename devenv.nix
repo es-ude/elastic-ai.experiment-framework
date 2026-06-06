@@ -36,7 +36,6 @@
         ${uv_run} coverage run
         ${uv_run} coverage xml
       '';
-      before = ["check:tests"];
     };
 
     "check:types" = {
@@ -79,7 +78,26 @@
     "check:code-lint" = {
     };
 
+    
+    "check:unit_tests_python" = {
+      exec = ''
+        ${uv_run} python -m pytest tests/unit
+      '';
+    };
+
+    "check:integration_tests" = {
+      exec = ''
+        ${uv_run} python -m pytest tests/integration
+      '';
+    };
+
     "check:tests" = {
-    }; # this is triggered in CI with --mode before flag
+      exec = ''
+        ${uv_run} coverage erase
+        ${uv_run} coverage run -m pytest tests/unit tests/integration
+        ${uv_run} coverage xml -o coverage.xml
+      '';
+    };
+
   };
 }

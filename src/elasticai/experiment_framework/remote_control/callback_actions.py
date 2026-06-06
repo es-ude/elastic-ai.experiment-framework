@@ -2,15 +2,12 @@ from dataclasses import dataclass
 
 
 @dataclass
-class NoAction:
-    ...
+class NoAction: ...
 
 
 @dataclass
 class SendChunk:
     data: bytes
-
-
 
 
 CallbackAction = SendChunk | NoAction
