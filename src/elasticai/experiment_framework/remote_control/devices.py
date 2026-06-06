@@ -74,5 +74,6 @@ def detect_device(pid: int, vid: int) -> str:
             return port.device
     else:
         raise RuntimeError(
-            f"Failed to detect device {pid=}, {vid=}. Make sure it is connected. If this still fails you have to specify it manually."
+            f"Failed to detect device {pid=}, {vid=}. Make sure it is "
+            "connected. If this still fails you have to specify it manually."
         )
