@@ -1,30 +1,35 @@
-from contextlib import ExitStack
-from typing import Self, override, cast
 import dataclasses
+import logging
+import os
+import shlex
+from contextlib import ExitStack
+from dataclasses import dataclass
+from pathlib import Path
+from string import Template
+from tarfile import open as tar_open
+from tempfile import TemporaryDirectory
+from typing import Self, cast, override
+
+import click
+from fabric import Connection as _fabConnection
+from invoke import Context as _invContext
 
 from elasticai.experiment_framework.synthesis.synthesis import (
     CachedSynthesis,
     TargetPlatforms,
-    SynthesisConfig as _SynthConfig,
-    SynthesisStrategy as _SynthStrat,
     load_synthesis_config_from_env,
 )
-from .verbosity import Verbosity
-from dataclasses import dataclass
-import logging
-from fabric import Connection as _fabConnection
-import click
-from pathlib import Path
-from tempfile import TemporaryDirectory
-from tarfile import open as tar_open
-from string import Template
-from invoke import Context as _invContext
-import os
-import shlex
+from elasticai.experiment_framework.synthesis.synthesis import (
+    SynthesisConfig as _SynthConfig,
+)
+from elasticai.experiment_framework.synthesis.synthesis import (
+    SynthesisStrategy as _SynthStrat,
+)
+
 from ._connection import Connection as _Connection
 from ._connection_fabric import ConnectionWrapperForFabric as _fabConnectionWrapper
 from ._connection_invoke import ConnectionWrapperForInvoke as _invokeConnection
-
+from .verbosity import Verbosity
 
 _fpga_model_for_platform = {TargetPlatforms.env5: "xc7s15ftgb196-2"}
 
@@ -224,7 +229,8 @@ def _run_synthesis(
     envvar=_SYNTH_HOST_ENVVARS,
     default="",
     required=True,
-    help="The host we will reach via ssh to run vivado, needs to provide ssh service and Vivado, without setting this, synthesis will run locally",
+    help="The host we will reach via ssh to run vivado, needs to provide ssh service "
+    "and Vivado, without setting this, synthesis will run locally",
 )
 @click.option("--ssh-user", envvar=_SYNTH_SSH_USER_ENVVARS, required=True)
 @click.option("--ssh-port", envvar=_SYNTH_SSH_PORT_ENVVARS, default=22, type=click.INT)
@@ -239,7 +245,10 @@ def _run_synthesis(
     "--remote-working-dir",
     envvar=_SYNTH_REMOTE_WORKING_DIR_ENVVARS,
     required=True,
-    help="Commands will be run from this directory on the remote host. The directory will be cleaned before each run, so you can still access any artifacts after each run. CAUTION: has not been tried with relative paths!",
+    help="Commands will be run from this directory on the remote host. "
+    "The directory will be cleaned before each run, so you can still "
+    "access any artifacts after each run. CAUTION: has not been tried "
+    "with relative paths!",
 )
 @click.option(
     "--vivado-path",
@@ -295,7 +304,8 @@ if {[catch {
     # STEP#1: Setup design sources and constraints
     create_project ${project_name} ${remote_working_dir} -part $part_number -force
     add_files -fileset sources_1 ${remote_working_dir}/${srcs_dir}
-    add_files -fileset constrs_1 -norecurse ${remote_working_dir}/${srcs_dir}/constraints.xdc
+    add_files -fileset constrs_1 -norecurse \
+${remote_working_dir}/${srcs_dir}/constraints.xdc
     update_compile_order -fileset sources_1
 
     # STEP#2: Run synthesis
