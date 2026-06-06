@@ -1,8 +1,10 @@
 import dataclasses
+
 import pytest
+
 from elasticai.experiment_framework.synthesis import (
-    load_synthesis_config_from_env,
     SynthesisConfig,
+    load_synthesis_config_from_env,
 )
 
 

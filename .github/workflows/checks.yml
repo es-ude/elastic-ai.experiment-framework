@@ -64,7 +64,7 @@ jobs:
       - name: prepare devenv
         uses: ./.github/actions/prepare-devenv
       - name: run tests
-        run: devenv --option torch.backend:string "cpu" tasks run check:tests --mode before
+        run: devenv --option torch.backend:string "cpu" tasks run check:tests  --mode before
       - name: Publish coverage report
         uses: orgoro/coverage@v3.1
         with:
