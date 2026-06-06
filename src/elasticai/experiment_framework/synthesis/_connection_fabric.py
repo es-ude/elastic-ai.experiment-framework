@@ -1,8 +1,10 @@
-from pathlib import Path
 from contextlib import AbstractContextManager
+from pathlib import Path
+
 from fabric import Connection as _fabConnection
-from .verbosity import Verbosity
+
 from ._connection import Connection
+from .verbosity import Verbosity
 
 
 class ConnectionWrapperForFabric(Connection):
