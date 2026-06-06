@@ -205,5 +205,6 @@ int main(void)
     RUN_TEST(test_close_task);
     RUN_TEST(test_ack);
     RUN_TEST(test_nack);
+    RUN_TEST(test_close_task);
     return UNITY_END();
 }
