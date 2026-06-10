@@ -10,6 +10,7 @@ from elasticai.experiment_framework.remote_control.callback_actions import (
 from elasticai.experiment_framework.remote_control.commands import (
     Command,
 )
+from elasticai.experiment_framework.remote_control.flags import Flags
 from elasticai.experiment_framework.remote_control.message import Message
 from elasticai.experiment_framework.remote_control.task import (
     Task,
@@ -114,6 +115,21 @@ class TestOpenTask:
         assert task_manager._device.rx[1].header.command == Command.DATA_CHUNK
         assert task_manager._device.rx[1].payload == msg.encode()
 
+    async def test_open_task_with_ack_waits_for_ack(self, task_manager, task1, ack):
+
+        open_task_co = asyncio.create_task(task_manager.open_task(task1, need_ack=True))
+
+        await asyncio.sleep(0)
+        assert task1.state == TaskState.OPENING
+        assert not task1._opened_event.is_set()
+
+        await task_manager._device.tx.put(ack)
+
+        await open_task_co
+
+        assert task1.state == TaskState.OPENED
+        assert task1._opened_event.is_set()
+
 
 class TestDataChunks:
     async def test_receive_data_chunk(self, task_manager, task1, msg):
@@ -148,6 +164,64 @@ class TestDataChunks:
         assert task1.received_data[1] == data_1
         assert task1.received_data[2] == data_2
 
+    async def test_send_chunk(self, task_manager, task1):
+        task1 = await task_manager.open_task(task1)
+        data = b"hello"
+        next_msg_id = task1._next_msg_id
+        await task_manager.send_chunk(task1, data)
+
+        chunk = Message(Command.DATA_CHUNK, payload=data, task_id=0, msg_id=next_msg_id)
+
+        assert task_manager._device.rx[2] == chunk
+
+    async def test_send_ack_data_chunks(self, task_manager, task1):
+        task1 = await task_manager.open_task(task1)
+        data = b"hello"
+
+        task_coro = asyncio.create_task(
+            task_manager.send_chunk(task1, data, need_ack=True)
+        )
+
+        ack = Message(
+            Command.ACK,
+            payload=b"",
+            task_id=task1.task_id,
+            msg_id=task1._next_msg_id,
+        )
+
+        await asyncio.sleep(0)
+
+        assert task1._pending_acks[1] is not None
+
+        await task_manager._device.tx.put(ack)
+        await task_coro
+
+        assert task1._pending_acks.get(1, None) is None
+
+    async def test_ack_received_data_chunks(self, task_manager, task1):
+        task1 = await task_manager.open_task(task1)
+        data = b"hello"
+        chunk = Message(
+            Command.DATA_CHUNK,
+            payload=data,
+            flags=Flags(need_ack=True).to_byte(),
+            task_id=0,
+            msg_id=0x2,
+        )
+
+        ack = Message(
+            Command.ACK,
+            payload=b"",
+            task_id=0,
+            msg_id=0x2,
+        )
+        await asyncio.sleep(0)
+
+        await task_manager._device.tx.put(chunk)
+        await asyncio.sleep(0)
+
+        assert task_manager._device.rx[2] == ack
+
 
 class TestReturn:
     async def test_return_mark_task_as_finished(self, task_manager, task1, ret):
@@ -157,10 +231,55 @@ class TestReturn:
 
         await asyncio.sleep(0)
 
-        assert task1.state == TaskState.FINISHED
+        assert task1.state == TaskState.RETURNED
 
 
-class TestTransactionIds:
+class TestClose:
+    async def test_close_mark_task_as_closed(self, task_manager, task1):
+        await task_manager.open_task(task1)
+
+        await task_manager.close_task(task1)
+
+        assert task1.state == TaskState.CLOSED
+
+    async def test_closed_with_ack_waits_ack(self, task_manager, task1, ret, ack):
+        await task_manager.open_task(task1)
+
+        async def send_ack_later():
+            await asyncio.sleep(0)
+            await task_manager._device.tx.put(ack)
+
+        asyncio.create_task(send_ack_later())
+        await task_manager.close_task(task1, need_ack=True)
+
+        assert task1.state == TaskState.CLOSED
+
+    async def test_close_state_transitions(self, task_manager, task1, ack):
+        await task_manager.open_task(task1)
+
+        async def send_ack_delayed():
+            await asyncio.sleep(0.01)
+            await task_manager._device.tx.put(ack)
+
+        asyncio.create_task(send_ack_delayed())
+
+        close_task_coro = asyncio.create_task(
+            task_manager.close_task(task1, need_ack=True)
+        )
+
+        await asyncio.sleep(0)
+
+        assert task1.state == TaskState.CLOSING
+        assert not task1._closed_event.is_set()
+
+        await close_task_coro
+
+        assert task1.state == TaskState.CLOSED
+        assert task1._closed_event.is_set()
+        assert task1.task_id not in task_manager._running_tasks
+
+
+class TestTaskIds:
     async def test_unique_ids(self, task_manager, task1, task2):
 
         await task_manager.open_task(task1)
@@ -174,11 +293,11 @@ class TestTransactionIds:
 
         assert task1.task_id < task2.task_id
 
-    async def test_ids_reused_after_finish(self, task_manager, task1, ret):
+    async def test_ids_reused_after_task_closed(self, task_manager, task1, ret):
         task1 = await task_manager.open_task(task1)
         task_id1 = task1.task_id
 
-        await task_manager._device.tx.put(ret)
+        await task_manager.close_task(task1)
         await asyncio.sleep(0)
 
         task2 = await task_manager.open_task(task1)
