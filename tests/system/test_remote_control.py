@@ -1,8 +1,10 @@
+import asyncio
 import logging
 import socket
 import subprocess
 import time
 from typing import AsyncGenerator
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -10,6 +12,7 @@ from elasticai.experiment_framework.remote_control.callback_actions import (
     CallbackAction,
     NoAction,
 )
+from elasticai.experiment_framework.remote_control.commands import Command
 from elasticai.experiment_framework.remote_control.connection_provider import (
     ConnectionProvider,
 )
@@ -136,7 +139,7 @@ class DummyTask(Task):
 class TestClient:
     @pytest.mark.asyncio
     async def test_round_trip_message(self, c_server):
-        data = b"abcdefghijkl"  # 12 byte
+        data = b"abcdefghijkl"
         provider = ConnectionProvider()
         async with provider.connectTCP(SERVER_HOST, SERVER_PORT) as stream:
             device = MessageIO(stream)
@@ -151,3 +154,99 @@ class TestClient:
 
             assert task.state == TaskState.RETURNED
             assert task.received_data[0] == data
+
+    @pytest.mark.asyncio
+    async def test_adding_need_ack_waits_for_the_ack(self, c_server):
+        data = b"abcdefghijkl"
+        provider = ConnectionProvider()
+        async with provider.connectTCP(SERVER_HOST, SERVER_PORT) as stream:
+            device = MessageIO(stream)
+            manager = TaskManager(device)
+            await manager.start()
+            task = DummyTask(task_def_id=0, msg=data)
+            task.timeout = 5
+
+            ack_received = asyncio.Event()
+
+            original = manager._handle_ack
+
+            async def delayed_ack(*args, **kwargs):
+                ack_received.set()
+                await asyncio.sleep(0.5)
+                await original(*args, **kwargs)
+
+            mock = AsyncMock(wraps=delayed_ack)
+            setattr(manager, "_handle_ack", mock)
+
+            task_open = asyncio.create_task(manager.open_task(task, need_ack=True))
+
+            await ack_received.wait()
+
+            assert task.state == TaskState.OPENING
+
+            await task_open
+
+            assert task.state == TaskState.OPENED
+
+    @pytest.mark.asyncio
+    async def test_closing_task(self, c_server):
+        data = b"abcdefghijkl"
+        provider = ConnectionProvider()
+        async with provider.connectTCP(SERVER_HOST, SERVER_PORT) as stream:
+            device = MessageIO(stream)
+            manager = TaskManager(device)
+            await manager.start()
+            task = DummyTask(task_def_id=0, msg=data)
+
+            await manager.open_task(task)
+            await manager.send_chunk(task, data)
+
+            await asyncio.sleep(0.1)
+
+            assert task.state == TaskState.RETURNED
+
+            await manager.close_task(task, need_ack=True)
+
+            await manager.stop()
+
+            assert task.state == TaskState.CLOSED
+
+    @pytest.mark.asyncio
+    async def test_remote_retransmits_after_timeout_on_acks(
+        self, c_server, monkeypatch
+    ):
+        data = b"abcdefghijkl"
+
+        provider = ConnectionProvider()
+        async with provider.connectTCP(SERVER_HOST, SERVER_PORT) as stream:
+            device = MessageIO(stream)
+            manager = TaskManager(device)
+            await manager.start()
+
+            # task_def_id 2 sets need ack on a chunk it sends after open task
+            task = DummyTask(task_def_id=2, msg=data)
+            task.timeout = 0.1
+
+            count = 3
+
+            async def ignore_twice_before_ack(task, message):
+                nonlocal count
+                count -= 1
+
+                if count == 0:
+                    await manager._send_message(
+                        Command.ACK,
+                        task_id=task.task_id,
+                        msg_id=message.header.msg_id,
+                    )
+
+            monkeypatch.setattr(manager, "_handle_chunk", ignore_twice_before_ack)
+
+            await manager.open_task(task)
+            await manager.send_chunk(task, data)
+
+            await asyncio.sleep(1)
+            await asyncio.sleep(1)
+            await manager.stop()
+
+            assert count == 0
