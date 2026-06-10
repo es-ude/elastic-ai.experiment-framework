@@ -5,6 +5,9 @@ class ProtocolError(Exception):
 class UnexpectedMessageError(ProtocolError):
     pass
 
+class ReceivedNackError(ProtocolError):
+    pass
+
 
 class InvalidHeaderError(ProtocolError):
     pass

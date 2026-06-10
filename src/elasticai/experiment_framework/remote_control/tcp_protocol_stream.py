@@ -37,4 +37,6 @@ class TCPProtocolStream(asyncio.Protocol, IOStream):
         return bytes(result)
 
     async def write(self, data: bytes | bytearray) -> None:  # type: ignore[override]
+        _logger.debug(f"[CLIENT] write data  bytes {data}", stacklevel=2)
+        
         self.transport.write(data)

@@ -13,9 +13,8 @@ class MessageIO:
         self._logger = logging.getLogger(__name__)
 
     async def _do_read(self, num_bytes) -> bytes:
-        self._logger.debug(f"[CLIENT] {num_bytes} bytes", stacklevel=2)
         data = await self._stream.read(num_bytes)
-        self._logger.debug(f"[CLIENT] read data {data}", stacklevel=2)
+        self._logger.debug(f"[CLIENT] read data {num_bytes} bytes {data}", stacklevel=2)
         return bytes(data)
 
     async def read(self) -> Message:
