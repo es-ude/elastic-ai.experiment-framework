@@ -6,6 +6,10 @@ class UnexpectedMessageError(ProtocolError):
     pass
 
 
+class ReceivedNackError(ProtocolError):
+    pass
+
+
 class InvalidHeaderError(ProtocolError):
     pass
 
@@ -25,3 +29,6 @@ class InvalidMsgIdError(ValueError): ...
 
 
 class InvalidPayloadLenError(ValueError): ...
+
+
+class MessageRetransmissionError(ValueError): ...
