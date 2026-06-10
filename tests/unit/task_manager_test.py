@@ -165,7 +165,7 @@ class TestReturn:
 
         await asyncio.sleep(0)
 
-        assert task1.state == TaskState.FINISHED
+        assert task1.state == TaskState.RETURNED
 
 
 class TestTransactionIds:

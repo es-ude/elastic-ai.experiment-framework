@@ -2,10 +2,10 @@ import asyncio
 import logging
 from typing import AsyncIterable, Awaitable, Callable, Dict
 
-from .callback_actions import CallbackAction, SendChunk
+from .callback_actions import CallbackAction, CloseTask, SendChunk
 from .commands import Command
 from .constants import MAX_TRANSACTIONS, NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD
-from .exceptions import UnexpectedMessageError
+from .exceptions import ReceivedNackError, UnexpectedMessageError
 from .message import Message
 from .message_builder import MessageBuilder
 from .message_io import MessageIO
@@ -30,7 +30,7 @@ class TaskManager:
         if self._receive_loop:
             self._receiver.cancel()
 
-    async def open_task(self, task: Task) -> Task:
+    async def open_task(self, task: Task, need_ack: bool | None = None) -> Task:
         tid = self._next_transaction_id()
         task._state = TaskState.OPENING
         task._transaction_id = tid
@@ -42,8 +42,12 @@ class TaskManager:
             func_id=task.func_id,
             need_ack=task.need_ack,
         )
-
-        if task.need_ack:
+        
+        need_ack = (need_ack is not None and need_ack) or (
+                need_ack is None and task.need_ack
+            )
+        
+        if need_ack:
             await asyncio.wait_for(
                 task._opened_event.wait(),
                 timeout=task.timeout,
@@ -54,9 +58,34 @@ class TaskManager:
 
         return task
 
-    async def send_chunk(self, task: Task, data: bytes) -> None:
+    async def close_task(self, task: Task, need_ack: bool | None = None) -> None:
+        task = self._running_tasks[task.transaction_id]
+
+        if not (task._state == TaskState.OPENING or task._state == TaskState.CLOSING):
+            task._state = TaskState.CLOSING
+            need_ack = (need_ack is not None and need_ack) or (
+                need_ack is None and task.need_ack
+            )
+
+            await self._send_message(
+                command=Command.CLOSE_TASK,
+                transaction_id=task.transaction_id,
+                need_ack=need_ack,
+            )
+            if need_ack:
+                await asyncio.wait_for(
+                    task._closed_event.wait(),
+                    timeout=task.timeout,
+                )
+            task._state = TaskState.CLOSED
+            self._running_tasks.pop(task.transaction_id)
+
+    async def send_chunk(
+        self, task: Task, data: bytes, need_ack: bool | None = None
+    ) -> None:
         task = self._running_tasks[task.transaction_id]
         data_id = task._next_data_id
+        
         await self._send_message(
             command=Command.DATA_CHUNK,
             transaction_id=task.transaction_id,
@@ -64,8 +93,12 @@ class TaskManager:
             data=data,
             need_ack=task.need_ack,
         )
+        
+        need_ack = (need_ack is not None and need_ack) or (
+                need_ack is None and task.need_ack
+            )
 
-        if not task.need_ack:
+        if not need_ack:
             task._next_data_id += 1
             return
 
@@ -94,7 +127,8 @@ class TaskManager:
 
             if task is None:
                 _logger.warning("[CLIENT]unknown tid=%d", tid)
-                raise UnexpectedMessageError()
+                await self._send_nack(message)
+                return
 
             handlers: dict[
                 Command,
@@ -104,6 +138,7 @@ class TaskManager:
                 ],
             ] = {
                 Command.ACK: self._handle_ack,
+                Command.NACK: self._handle_nack,
                 Command.DATA_CHUNK: self._handle_chunk,
                 Command.RETURN: self._handle_return,
             }
@@ -126,6 +161,18 @@ class TaskManager:
             _logger.error("[CLIENT]error handling message: %s", e)
             raise
 
+    async def _send_nack(self, msg: Message):
+        tid = msg.header.transaction_id
+        await self._send_message(
+            command=Command.NACK,
+            transaction_id=tid,
+            data_id=(
+                msg.payload[NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD]
+                if msg.header.command == Command.DATA_CHUNK
+                else tid
+            ),
+        )
+
     async def _handle_ack(
         self,
         task: Task,
@@ -135,6 +182,10 @@ class TaskManager:
 
         if task.state == TaskState.OPENING:
             task._opened_event.set()
+            return
+
+        if task.state == TaskState.CLOSING:
+            task._finished_event.set()
             return
 
         self._validate_payload_has_data_id(payload)
@@ -152,6 +203,34 @@ class TaskManager:
 
         if not fut.done():
             fut.set_result(True)
+
+    async def _handle_nack(
+        self,
+        task: Task,
+        message: Message,
+    ) -> None:
+        payload = message.payload
+
+        self._validate_payload_has_data_id(payload)
+        data_id = payload[NUM_BYTES_OFFSET_DATA_ID_IN_PAYLOAD]
+
+        fut = task._pending_acks.pop(data_id, None)
+
+        if fut is None:
+            _logger.warning(
+                "[CLIENT]  Unexpected NACK tid=%d data_id=%d",
+                task.transaction_id,
+                data_id,
+            )
+            return
+
+        if not fut.done():
+            _logger.error(
+                "[CLIENT]  Unexpected NACK tid=%d data_id=%d",
+                task.transaction_id,
+                data_id,
+            )
+            fut.set_exception(ReceivedNackError)
 
     async def _handle_chunk(
         self,
@@ -189,7 +268,7 @@ class TaskManager:
         ):
             return
 
-        task._state = TaskState.FINISHED
+        task._state = TaskState.RETURNED
         task._finished_event.set()
 
         self._running_tasks.pop(task.transaction_id, None)
@@ -226,8 +305,10 @@ class TaskManager:
 
     async def _handle_action(self, task: Task, action) -> None:
         match action:
-            case SendChunk(data=d):
-                await self.send_chunk(task, d)
+            case SendChunk(data, need_ack):
+                await self.send_chunk(task, data, need_ack)
+            case CloseTask(need_ack):
+                await self.close_task(task,need_ack)
             case _:
                 _logger.warning("[CLIENT] unknown action: %s", action)
 
