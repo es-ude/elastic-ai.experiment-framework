@@ -2,12 +2,12 @@ import asyncio
 import logging
 from typing import AsyncIterable, Awaitable, Callable, Dict
 
-from .callback_actions import CallbackAction, SendChunk
+from .callback_actions import CallbackAction, CloseTask, SendChunk
 from .commands import Command
 from .constants import (
     MAX_TASKS,
 )
-from .exceptions import UnexpectedMessageError
+from .exceptions import ReceivedNackError, UnexpectedMessageError
 from .message import Message
 from .message_builder import MessageBuilder
 from .message_io import MessageIO
@@ -32,22 +32,27 @@ class TaskManager:
         if self._receive_loop:
             self._receiver.cancel()
 
-    async def open_task(self, task: Task) -> Task:
+    async def open_task(self, task: Task, need_ack: bool | None = None) -> Task:
         task_id = self._next_task_id()
         task._state = TaskState.OPENING
+
         task._task_id = task_id
         msg_id = task._next_msg_id
+
         self._running_tasks[task_id] = task
 
+        need_ack = (need_ack is not None and need_ack) or (
+            need_ack is None and task.need_ack
+        )
         await self._send_message(
             command=Command.OPEN_TASK,
             task_id=task_id,
             msg_id=msg_id,
             task_def_id=task.task_def_id,
-            need_ack=task.need_ack,
+            need_ack=need_ack,
         )
 
-        if task.need_ack:
+        if need_ack:
             await asyncio.wait_for(
                 task._opened_event.wait(),
                 timeout=task.timeout,
@@ -58,7 +63,31 @@ class TaskManager:
 
         return task
 
-    async def send_chunk(self, task: Task, data: bytes) -> None:
+    async def close_task(self, task: Task, need_ack: bool | None = None) -> None:
+        task = self._running_tasks[task.task_id]
+
+        if not (task._state == TaskState.OPENING or task._state == TaskState.CLOSING):
+            task._state = TaskState.CLOSING
+            need_ack = (need_ack is not None and need_ack) or (
+                need_ack is None and task.need_ack
+            )
+
+            await self._send_message(
+                command=Command.CLOSE_TASK,
+                task_id=task.task_id,
+                need_ack=need_ack,
+            )
+            if need_ack:
+                await asyncio.wait_for(
+                    task._closed_event.wait(),
+                    timeout=task.timeout,
+                )
+            task._state = TaskState.CLOSED
+            self._running_tasks.pop(task.task_id)
+
+    async def send_chunk(
+        self, task: Task, data: bytes, need_ack: bool | None = None
+    ) -> None:
         task = self._running_tasks[task.task_id]
         msg_id = task._next_msg_id
 
@@ -70,7 +99,9 @@ class TaskManager:
             need_ack=task.need_ack,
         )
 
-        if not task.need_ack:
+        need_ack = need_ack or (need_ack is None and task.need_ack)
+
+        if not need_ack:
             task._next_msg_id += 1
             return
 
@@ -88,16 +119,24 @@ class TaskManager:
             task._pending_acks.pop(msg_id, None)
 
             raise TimeoutError(f"[Client]no ACK task_id={task.task_id} msg_id={msg_id}")
+        except ReceivedNackError:
+            task._pending_acks.pop(msg_id, None)
+
+            raise TimeoutError(f"[Client]no ACK task_id={task.task_id} msg_id={msg_id}")
 
     async def _on_message(self, message: Message) -> None:
         try:
             task_id = message.header.task_id
+            need_ack = message.header.flags.need_ack
 
             task = self._running_tasks.get(task_id)
 
             if task is None:
                 _logger.warning("[CLIENT]unknown task_id=%d", task_id)
-                raise UnexpectedMessageError()
+                if need_ack:
+                    await self._send_nack(message)
+                    return
+                raise UnexpectedMessageError("%s", message)
 
             handlers: dict[
                 Command,
@@ -107,6 +146,7 @@ class TaskManager:
                 ],
             ] = {
                 Command.ACK: self._handle_ack,
+                Command.NACK: self._handle_nack,
                 Command.DATA_CHUNK: self._handle_chunk,
                 Command.RETURN: self._handle_return,
             }
@@ -129,6 +169,13 @@ class TaskManager:
             _logger.error("[CLIENT]error handling message: %s", e)
             raise
 
+    async def _send_nack(self, msg: Message):
+        task_id = msg.header.task_id
+
+        await self._send_message(
+            command=Command.NACK, task_id=task_id, msg_id=msg.header.msg_id
+        )
+
     async def _handle_ack(
         self,
         task: Task,
@@ -136,6 +183,10 @@ class TaskManager:
     ) -> None:
         if task.state == TaskState.OPENING:
             task._opened_event.set()
+            return
+
+        if task.state == TaskState.CLOSING:
+            task._closed_event.set()
             return
 
         msg_id = message.header.msg_id
@@ -152,6 +203,31 @@ class TaskManager:
 
         if not fut.done():
             fut.set_result(True)
+
+    async def _handle_nack(
+        self,
+        task: Task,
+        message: Message,
+    ) -> None:
+        msg_id = message.header.msg_id
+
+        fut = task._pending_acks.pop(msg_id, None)
+
+        if fut is None:
+            _logger.warning(
+                "[CLIENT]  Unexpected NACK task_id=%d msg_id=%d",
+                task.task_id,
+                msg_id,
+            )
+            return
+
+        if not fut.done():
+            _logger.error(
+                "[CLIENT]  Unexpected NACK task_id=%d msg_id=%d",
+                task.task_id,
+                msg_id,
+            )
+            fut.set_exception(ReceivedNackError)
 
     async def _handle_chunk(
         self,
@@ -182,8 +258,15 @@ class TaskManager:
         ):
             return
 
-        task._state = TaskState.FINISHED
-        task._finished_event.set()
+        task._state = TaskState.RETURNED
+        task._returned_event.set()
+
+        if message.header.flags.need_ack:
+            await self._send_message(
+                Command.ACK,
+                task_id=task.task_id,
+                msg_id=task._next_msg_id,
+            )
 
         self._running_tasks.pop(task.task_id, None)
 
@@ -219,8 +302,10 @@ class TaskManager:
 
     async def _handle_action(self, task: Task, action) -> None:
         match action:
-            case SendChunk(data=d):
-                await self.send_chunk(task, d)
+            case SendChunk(data, need_ack):
+                await self.send_chunk(task, data, need_ack)
+            case CloseTask(need_ack):
+                await self.close_task(task, need_ack)
             case _:
                 _logger.warning("[CLIENT] unknown action: %s", action)
 

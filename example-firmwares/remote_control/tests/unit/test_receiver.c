@@ -79,7 +79,7 @@ void test_process_rx_detects_complete_frame(void)
         ringbuffer_push(&incoming, &frame[i]);
     }
 
-    process_rx(&rx, &mock_task_manager);
+    process_rx(&rx, &mock_task_manager, NULL);
 
     TEST_ASSERT_TRUE(handler_called);
 }
@@ -112,7 +112,7 @@ void test_process_rx_rejects_too_large_payload(void)
         ringbuffer_push(&incoming, &frame[i]);
     }
 
-    process_rx(&rx, &mock_task_manager);
+    process_rx(&rx, &mock_task_manager, NULL);
 
     TEST_ASSERT_FALSE(handler_called);
     TEST_ASSERT_EQUAL(WAIT_START, rx.state);

@@ -4,6 +4,8 @@
 #include "frame.h"
 #include "ringbuffer.h"
 #include "task_manager.h"
+#include "sender.h"
+
 #include "transport.h"
 
 #define FRAME_LITTLE_ENDIAN 1
@@ -43,6 +45,6 @@ typedef struct
     uint8_t len_bytes[2];
 } Receiver;
 
-void process_rx(Receiver *rx, TaskManager *task_manager);
+void process_rx(Receiver *rx, TaskManager *task_manager, Sender *tx);
 
 #endif

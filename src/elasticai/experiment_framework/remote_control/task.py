@@ -11,10 +11,13 @@ from .callback_actions import CallbackAction
 
 
 class TaskState(Enum):
+    INITIAL = auto()
     OPENING = auto()
     OPENED = auto()
     RECEIVED_DATA = auto()
-    FINISHED = auto()
+    RETURNED = auto()
+    CLOSING = auto()
+    CLOSED = auto()
 
 
 class Task(ABC):
@@ -25,8 +28,11 @@ class Task(ABC):
 
         self._task_id: int = 0
         self._state: TaskState = TaskState.OPENING
+        self._task_id: int = 0
+        self._state: TaskState = TaskState.INITIAL
         self._opened_event: asyncio.Event = asyncio.Event()
-        self._finished_event: asyncio.Event = asyncio.Event()
+        self._returned_event: asyncio.Event = asyncio.Event()
+        self._closed_event: asyncio.Event = asyncio.Event()
         self._next_msg_id: int = 0
         self._received_data: dict[int, bytes] = {}
         self._pending_acks: Dict[int, asyncio.Future] = {}

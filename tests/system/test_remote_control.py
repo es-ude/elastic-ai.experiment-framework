@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import socket
 import subprocess
@@ -8,6 +9,7 @@ import pytest
 
 from elasticai.experiment_framework.remote_control.callback_actions import (
     CallbackAction,
+    CloseTask,
     SendChunk,
 )
 from elasticai.experiment_framework.remote_control.connection_provider import (
@@ -117,7 +119,7 @@ _logger = logging.getLogger(__name__)
 class DummyTask(Task):
     def __init__(self, task_def_id: int, msg: bytes) -> None:
         self.msg = msg
-        self.task_def_id = 0
+        self.task_def_id = task_def_id
         self.need_ack = False
         super().__init__()
 
@@ -133,13 +135,13 @@ class DummyTask(Task):
     async def on_return(self) -> AsyncGenerator[CallbackAction, None]:
         _logger.debug(f"[CLIENT] callback: task returned = {self.state}")
         return
-        yield
+        yield CloseTask(need_ack=True)
 
 
 class TestClient:
     @pytest.mark.asyncio
     async def test_round_trip_message(self, c_server):
-        data = b"abcdefghijkl"  # 12 byte
+        data = b"abcdefghijkl"
         provider = ConnectionProvider()
         stream = await provider.connectTCP(SERVER_HOST, SERVER_PORT)
         device = MessageIO(stream)
@@ -147,8 +149,47 @@ class TestClient:
         await manager.start()
         task = DummyTask(task_def_id=0, msg=data)
 
-        task_openned = await manager.open_task(task)
-        await task_openned._finished_event.wait()
+        (task_openned,) = (await manager.open_task(task),)
+        await task_openned._returned_event.wait()
+        await manager.stop()
 
-        assert task.state == TaskState.FINISHED
+        assert task.state == TaskState.RETURNED
         assert task.received_data[0] == data
+
+    @pytest.mark.asyncio
+    async def test_adding_need_ack_waits_for_the_ack(self, c_server):
+        data = b"abcdefghijkl"
+        provider = ConnectionProvider()
+        stream = await provider.connectTCP(SERVER_HOST, SERVER_PORT)
+        device = MessageIO(stream)
+        manager = TaskManager(device)
+        await manager.start()
+        task = DummyTask(task_def_id=0, msg=data)
+
+        (task_openned,) = (await manager.open_task(task, need_ack=True),)
+        await task_openned._opened_event.wait()
+        await manager.stop()
+
+        assert task.state == TaskState.OPENED
+        assert task._opened_event.is_set()
+
+    @pytest.mark.asyncio
+    async def test_closing_task(self, c_server):
+        data = b"abcdefghijkl"
+        provider = ConnectionProvider()
+        stream = await provider.connectTCP(SERVER_HOST, SERVER_PORT)
+        device = MessageIO(stream)
+        manager = TaskManager(device)
+        await manager.start()
+        task = DummyTask(task_def_id=0, msg=data)
+        task.timeout = 8
+
+        (task_openned,) = (await manager.open_task(task),)
+
+        await asyncio.sleep(1)
+
+        assert task.state == TaskState.RETURNED
+
+        await manager.close_task(task_openned, need_ack=True)
+
+        assert task.state == TaskState.CLOSED
