@@ -145,9 +145,9 @@ class TestClient:
             await manager.start()
             task = DummyTask(task_def_id=0, msg=data)
 
-            task_openned = await manager.open_task(task)
+            await manager.open_task(task)
             await manager.send_chunk(task, data)
-            await task_openned._finished_event.wait()
+            await task.wait_for_return()
 
-            assert task.state == TaskState.FINISHED
+            assert task.state == TaskState.RETURNED
             assert task.received_data[0] == data

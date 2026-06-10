@@ -2,12 +2,19 @@ from dataclasses import dataclass
 
 
 @dataclass
-class NoAction: ...
+class NoAction:
+    pass
 
 
 @dataclass
 class SendChunk:
     data: bytes
+    need_ack: bool = False
 
 
-CallbackAction = SendChunk | NoAction
+@dataclass
+class CloseTask:
+    need_ack: bool = False
+
+
+CallbackAction = SendChunk | NoAction | CloseTask

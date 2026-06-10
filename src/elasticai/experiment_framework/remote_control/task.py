@@ -11,10 +11,13 @@ from .callback_actions import CallbackAction, NoAction
 
 
 class TaskState(Enum):
+    INITIAL = auto()
     OPENING = auto()
     OPENED = auto()
     RECEIVED_DATA = auto()
-    FINISHED = auto()
+    RETURNED = auto()
+    CLOSING = auto()
+    CLOSED = auto()
 
 
 class Task(ABC):
@@ -25,9 +28,11 @@ class Task(ABC):
 
         self._task_id: int = 0
         self._state: TaskState = TaskState.OPENING
-        self._opened_event: asyncio.Event = asyncio.Event()
-        self._finished_event: asyncio.Event = asyncio.Event()
+        self._return_code: int | None = None
+        self._returned_event = asyncio.Event()
+        self._state: TaskState = TaskState.INITIAL
         self._next_msg_id: int = 0
+        self._completion: asyncio.Future[int] | None = None
         self._received_data: dict[int, bytes] = {}
         self._pending_acks: Dict[int, asyncio.Future] = {}
 
@@ -42,6 +47,15 @@ class Task(ABC):
     @property
     def received_data(self) -> dict[int, bytes]:
         return self._received_data
+
+    async def wait_for_return(self) -> int:
+        if self._completion is None:
+            raise RuntimeError("Task has not been opened")
+
+        return await asyncio.wait_for(
+            asyncio.shield(self._completion),
+            timeout=self.timeout,
+        )
 
     async def on_opened(self) -> AsyncGenerator[CallbackAction, None]:
         yield NoAction()

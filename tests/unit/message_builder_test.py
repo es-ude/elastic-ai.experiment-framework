@@ -38,7 +38,9 @@ def test_close_task_empty_payload():
 
 def test_data_chunk_payload_is_data():
     data = b"Hello world"
-    builder = MessageBuilder().set_command(Command.DATA_CHUNK).set_data(data)
+    builder = (
+        MessageBuilder().set_command(Command.DATA_CHUNK).set_msg_id(3).set_data(data)
+    )
 
     msg = builder.build()
     assert msg.payload == data
