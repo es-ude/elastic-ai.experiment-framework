@@ -190,6 +190,25 @@ void test_msg_open_and_close_task(void)
     TEST_ASSERT_NULL(t->run);
 }
 
+void test_msg_open_and_close_task(void)
+{
+    Frame f = make_frame(OPEN_TASK, 3, 0, 0x00);
+    int id = msg_open_task(&f);
+    TEST_ASSERT_EQUAL_INT(3, id);
+
+    Frame close = make_frame(CLOSE_TASK, id, 0, 0x00);
+    int ret = msg_close_task(&close);
+
+    TEST_ASSERT_EQUAL_INT(0, ret);
+
+    Task *t = get_task_by_id(id);
+    TEST_ASSERT_NOT_NULL(t);
+    TEST_ASSERT_EQUAL(TASK_STATUS_IDLE, t->status);
+    TEST_ASSERT_EQUAL_INT(0, t->input_data_len);
+    TEST_ASSERT_EQUAL_INT(0, t->output_data_len);
+    TEST_ASSERT_NULL(t->run);
+}
+
 /* =========================
  * MAIN
  * ========================= */
