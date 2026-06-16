@@ -3,6 +3,7 @@
 #include "sender.h"
 #include "msg_types.h"
 #include "task_definitions.h"
+#include "log.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,8 +34,8 @@ void init_task_manager(RingBuffer *outgoing_rb, TaskManager *task_manager)
 // Enqueue a task to be processed by the tasks process.
 void enqueue_task(RingBuffer *rb, Task *task)
 {
-    printf("[Task Manager] Enqueue task with values: \n task_id: %d, function_id: %d\n",
-           task->id, task->task_definition_id);
+    LOG("[Task Manager] Enqueue task with values: \n task_id: %d, function_id: %d\n",
+        task->id, task->task_definition_id);
     ringbuffer_push(rb, &task);
 }
 
@@ -115,8 +116,7 @@ bool finish_task(Task *task, TaskManager *task_manager)
     task->funcs = NULL;
     task_manager->free_tasks++;
 
-    printf("[Task] Finished Task with id %i\n", task->id);
-    fflush(stdout);
+    LOG("[Task] Finished Task with id %i\n", task->id);
 
     return true;
 }
@@ -136,7 +136,7 @@ bool start_task(RingBuffer *rb, Task *task)
 {
     task->status = TASK_STATUS_RUNNING;
     enqueue_task(rb, task); // Enqueue the task to be processed by the tasks thread
-    printf("[Task] Started task with ID %i\n", task->id);
+    LOG("[Task] Started task with ID %i\n", task->id);
     return true;
 }
 
