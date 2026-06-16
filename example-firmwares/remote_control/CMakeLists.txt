@@ -122,6 +122,11 @@ if(PLATFORM STREQUAL "host")
 
     )
 
+    target_compile_definitions(remote_core
+
+        PUBLIC ENABLE_LOGGING
+
+    )
 
 elseif(PLATFORM STREQUAL "pico")
 
@@ -138,6 +143,8 @@ elseif(PLATFORM STREQUAL "pico")
 
     )
 
+
+    
 
 endif()
 
