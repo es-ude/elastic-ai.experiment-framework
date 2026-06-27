@@ -132,7 +132,7 @@ def test_raise_exception_when_invalid_payload_len():
         (Command.OPEN_TASK, 0x00, 0, 0, 0),
         (Command.DATA_CHUNK, 0x01, 1, 1, 100),
         (Command.ACK, 0x05, 255, 255, 1000),
-        (Command.RETURN, 0xFF, 128, 100, 65535),
+        (Command.RETURN, 0xFF, 128, 100, 102),
     ],
 )
 def test_to_bytes_from_bytes(command, flags, task_id, msg_id, payload_len):
