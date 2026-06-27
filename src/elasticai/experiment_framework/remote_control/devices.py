@@ -1,12 +1,9 @@
-from abc import abstractmethod
-from collections.abc import Generator
-from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Protocol, cast
+from typing import AsyncGenerator, Protocol
 
-from serial import Serial as _Serial
 from serial.tools import list_ports
 
+from .connection_provider import ConnectionProvider
 from .io_stream import IOStream
 
 
@@ -22,55 +19,53 @@ _SPECS = {_DeviceSpec(10, 11914, "env5")}
 
 class Device(Protocol):
     @property
-    @abstractmethod
     def name(self) -> str: ...
 
-    @contextmanager
-    @abstractmethod
-    def connect(self) -> Generator[IOStream]: ...
+    def connect(self) -> AsyncGenerator[IOStream]: ...
 
 
 class _SerialDevice(Device):
-    def __init__(self, spec: _DeviceSpec, comport: str) -> None:
+    def __init__(self, spec, port: str, baudrate: int = 115200):
         self._spec = spec
-        self._comport = comport
+        self._port = port
+        self._baudrate = baudrate
 
     @property
     def name(self) -> str:
         return self._spec.name
 
-    @contextmanager
-    def connect(self) -> Generator[IOStream]:
-        with _Serial(self._comport) as opened:
-            yield _SerialIOStream(opened)
-
-
-class _SerialIOStream(IOStream):
-    def __init__(self, _serial: _Serial):
-        self._serial = _serial
-
-    async def write(self, data: bytes | bytearray, /) -> int:
-        return cast(int, self._serial.write(data))
-
-    async def read(self, num_bytes: int, /) -> bytes:
-        return self._serial.read(num_bytes)
+    async def connect(self):
+        provider = ConnectionProvider()
+        async with provider.connectSerial(
+            port=self._port,
+            baudrate=self._baudrate,
+        ) as stream:
+            yield stream
 
 
 def probe_for_devices() -> list[Device]:
     discovered: list[Device] = []
+
     for spec in _SPECS:
         try:
-            comport = detect_device(spec.pid, spec.vid)
-            discovered.append(_SerialDevice(spec, comport=comport))
+            port = detect_device(spec.pid, spec.vid)
+
+            discovered.append(
+                _SerialDevice(
+                    spec=spec,
+                    port=port,
+                )
+            )
         except RuntimeError:
             continue
+
     return discovered
 
 
 def detect_device(pid: int, vid: int) -> str:
     all_ports = list_ports.comports()
     for port in all_ports:
-        if (port.pid, port.vid) == (pid, vid):
+        if getattr(port, "pid", None) == pid and getattr(port, "vid", None) == vid:
             return port.device
     else:
         raise RuntimeError(

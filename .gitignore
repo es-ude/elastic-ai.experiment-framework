@@ -25,4 +25,5 @@ coverage.xml
 .DS_*
 .coverage
 .cache/
-
+.logs
+logs
