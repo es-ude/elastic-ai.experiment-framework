@@ -55,6 +55,41 @@ $ cp build/env5_rev2_release\
 
 
 
+## Getting started 
+
+​```bash
+git clone --recurse-submodules https://github.com/your-org/elastic-ai.experiment-framework.git
+cd elastic-ai.experiment-framework
+devenv shell
+​```
+
+or normal cloning then run
+```
+git submodule update --init --recursive
+
+```
+
+## Tests with PICO
+
+**For Linux**
+To test with Pico you need to enable add a rules file in `/etc/udev/rules.d` directly  to allow allow automatic flashing the connected board. Here are the rules
+
+```
+# RP2040 in BOOTSEL mode
+SUBSYSTEM=="usb", ATTRS{idVendor}=="2e8a", ATTRS{idProduct}=="0003", MODE="0666"
+# RP2040 running firmware (CDC-ACM serial)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="2e8a", ATTRS{idProduct}=="000a", MODE="0666"
+# picotool access
+SUBSYSTEM=="usb", ATTRS{idVendor}=="2e8a", MODE="0666"
+```
+The file name must end with .rules, typically `/etc/udev/rules.d/99-elasticai-pico.rules`
+
+Then reload udev configurations
+```
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
 
 ## Extend the remote control CLI
 
