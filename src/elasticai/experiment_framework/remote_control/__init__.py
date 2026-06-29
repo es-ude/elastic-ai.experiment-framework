@@ -1,5 +1,6 @@
 from .commands import Command
 from .connection_provider import ConnectionProvider
+from .devices import _DeviceSpec
 from .exceptions import *  # noqa: F403
 from .flags import Flags
 from .header import Header
@@ -21,4 +22,5 @@ __all__ = [
     "TaskManager",
     "ConnectionProvider",
     "TCPProtocolStream",
+    "_DeviceSpec",
 ]

@@ -1,5 +1,6 @@
+from contextlib import _AsyncGeneratorContextManager, asynccontextmanager
 from dataclasses import dataclass
-from typing import AsyncGenerator, Protocol
+from typing import Protocol
 
 from serial.tools import list_ports
 
@@ -14,14 +15,11 @@ class _DeviceSpec:
     name: str
 
 
-_SPECS = {_DeviceSpec(10, 11914, "env5")}
-
-
 class Device(Protocol):
     @property
     def name(self) -> str: ...
 
-    def connect(self) -> AsyncGenerator[IOStream]: ...
+    def connect(self) -> _AsyncGeneratorContextManager[IOStream, None]: ...
 
 
 class _SerialDevice(Device):
@@ -34,6 +32,7 @@ class _SerialDevice(Device):
     def name(self) -> str:
         return self._spec.name
 
+    @asynccontextmanager
     async def connect(self):
         provider = ConnectionProvider()
         async with provider.connectSerial(
@@ -43,10 +42,10 @@ class _SerialDevice(Device):
             yield stream
 
 
-def probe_for_devices() -> list[Device]:
+def probe_for_devices(specs: set[_DeviceSpec]) -> list[Device]:
     discovered: list[Device] = []
 
-    for spec in _SPECS:
+    for spec in specs:
         try:
             port = detect_device(spec.pid, spec.vid)
 

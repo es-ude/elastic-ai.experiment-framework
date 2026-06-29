@@ -44,6 +44,7 @@ project-excludes = [
     "**/build",
     "**/*.pyc",
     "example-firmwares/build/**",
+    "example-firmwares/remote_control/pico-sdk/**",
 ]
 
 [tool.hatch.version]
@@ -66,7 +67,6 @@ extra-dev = ["pyrefly>=0.57.1", "ty>=0.0.24"]
 [tool.ty.environment]
 root = ["./src"]
 
-
 [tool.coverage.run]
 omit = [
     "tests/*py",
@@ -84,6 +84,9 @@ markers = [
 ]
 
 [tool.ruff]
+exclude = [
+    "example-firmwares/remote_control/pico-sdk/"
+]
 line-length = 88
 
 [tool.ruff.lint]
