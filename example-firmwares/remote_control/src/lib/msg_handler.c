@@ -7,6 +7,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+enum AckType
+{
+    SEND_ACK,
+    SEND_NACK,
+};
+
 void print_payload(uint8_t *payload, uint8_t payload_len)
 {
     LOG("[Payload] ");
@@ -56,7 +62,7 @@ int msg_data_chunk(RingBuffer *task_rb, Frame *frame, TaskManager *task_manager)
     if (task == NULL || task->status == TASK_STATUS_IDLE)
     {
         LOG("Invalid task ID in data chunk: %d\n", frame->header.transaction_id);
-        return -1; // Invalid task ID. send back nack
+        return -1;
     }
     LOG("[Server] Fetched Task with id %i\n", frame->header.transaction_id);
 
@@ -64,14 +70,36 @@ int msg_data_chunk(RingBuffer *task_rb, Frame *frame, TaskManager *task_manager)
     return task->id;
 }
 
+void send_ack(Frame *frame, Sender *tx, enum AckType ack_type)
+{
+    LOG("[Receiver] ACK requested for transaction ID: 0x%02X\n", frame->header.transaction_id);
+
+    uint8_t data_id = frame->header.message_type;
+    if (frame->header.message_type == DATA_CHUNK)
+    {
+        data_id = frame->payload[0]; // For data chunks, the data ID is in the first byte of the payload
+    }
+
+    Frame ack_frame = {0};
+    if (ack_type == SEND_ACK)
+    {
+        frame_builder_ack(&ack_frame, frame->header.transaction_id, data_id);
+    }
+    else
+    {
+        frame_builder_nack(&ack_frame, frame->header.transaction_id, data_id);
+    }
+    OutgoingOrder order = {
+        .frame = ack_frame,
+        .is_retransmit = 0};
+
+    ringbuffer_push(tx->outgoing_rb, &order);
+}
+
 void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_manager, Sender *tx)
 {
     int associated_transaction_id = 0;
-    enum
-    {
-        SEND_ACK,
-        SEND_NACK,
-    } ack_type = SEND_ACK;
+    enum AckType ack_type = SEND_ACK;
 
     bool need_ack = (frame->header.flags & FLAG_NEED_ACK) != 0;
 
@@ -80,7 +108,29 @@ void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_
         frame->header.start_byte, frame->header.message_type,
         frame->header.transaction_id, frame->header.payload_len);
 
-    // Call differenet message handler
+    // Check checksum
+    if (frame->header.flags & FLAG_HAS_CRC)
+    {
+        uint8_t incoming_checksum = frame->payload[frame->header.payload_len];
+        uint8_t expected_checksum = crc8((uint8_t *)frame, FRAME_OVERHEAD + frame->header.payload_len);
+        if (incoming_checksum != expected_checksum)
+        {
+            if (need_ack)
+            {
+                ack_type = SEND_NACK;
+                LOG("[Server] Received frame with invalid checksum. Sending NACK. Received: %02X, Expected: %02X\n", incoming_checksum, expected_checksum);
+                send_ack(frame, tx, ack_type);
+                return;
+            }
+            else
+            {
+                LOG("[Server] Received frame with invalid checksum, but no ACK requested. Ignoring frame. Received: %02X, Expected: %02X\n", incoming_checksum, expected_checksum);
+            }
+
+            return;
+        }
+    }
+
     switch (frame->header.message_type)
     {
     case OPEN_TASK:
@@ -92,7 +142,7 @@ void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_
         if (associated_transaction_id < 0)
         {
             LOG("[Server] Failed to open task for transaction ID: 0x%02X\n", frame->header.transaction_id);
-            ack_type = SEND_NACK; // Send nack back
+            ack_type = SEND_NACK;
         }
 
         tx->msg_counter[frame->header.transaction_id] = 0; // reset msg_id of outgoing messages. 0 is open task, 1 is following
@@ -102,7 +152,7 @@ void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_
         if (associated_transaction_id < 0)
         {
             LOG("[Server] Failed to close task for transaction ID: 0x%02X\n", frame->header.transaction_id);
-            ack_type = SEND_NACK; // Send nack back
+            ack_type = SEND_NACK;
         }
         break;
     case RETURN:
@@ -115,7 +165,7 @@ void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_
         if (associated_transaction_id < 0)
         {
             LOG("[Server] Failed to process data chunk for transaction ID: 0x%02X\n", frame->header.transaction_id);
-            ack_type = SEND_NACK; // Send nack back
+            ack_type = SEND_NACK;
         }
 
         break;
@@ -137,27 +187,6 @@ void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_
 
     if (need_ack)
     {
-        LOG("[Receiver] ACK requested for transaction ID: 0x%02X\n", frame->header.transaction_id);
-
-        uint8_t data_id = frame->header.message_type;
-        if (frame->header.message_type == DATA_CHUNK)
-        {
-            data_id = frame->payload[0]; // For data chunks, the data ID is in the first byte of the payload
-        }
-
-        Frame ack_frame = {0};
-        if (ack_type == SEND_ACK)
-        {
-            frame_builder_ack(&ack_frame, frame->header.transaction_id, data_id);
-        }
-        else
-        {
-            frame_builder_nack(&ack_frame, frame->header.transaction_id, data_id);
-        }
-        OutgoingOrder order = {
-            .frame = ack_frame,
-            .is_retransmit = 0};
-
-        ringbuffer_push(tx->outgoing_rb, &order);
+        send_ack(frame, tx, ack_type);
     }
 }
