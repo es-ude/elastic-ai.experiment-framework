@@ -6,7 +6,7 @@ import socket
 import subprocess
 import time
 from typing import AsyncGenerator
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, PropertyMock, patch
 
 import pytest
 import pytest_asyncio
@@ -15,7 +15,6 @@ from elasticai.experiment_framework.remote_control.callback_actions import (
     CallbackAction,
     NoAction,
 )
-from elasticai.experiment_framework.remote_control.commands import Command
 from elasticai.experiment_framework.remote_control.connection_provider import (
     ConnectionProvider,
 )
@@ -228,11 +227,7 @@ class TestTCPClient:
             count -= 1
 
             if count == 0:
-                await manager._send_message(
-                    Command.ACK,
-                    task_id=task.task_id,
-                    msg_id=message.header.msg_id,
-                )
+                await manager._send_ack(message)
 
         monkeypatch.setattr(manager, "_handle_chunk", ignore_twice_before_ack)
 
@@ -241,3 +236,44 @@ class TestTCPClient:
 
         await asyncio.sleep(2)
         assert count == 0
+
+    @pytest.mark.asyncio
+    async def test_checksum_are_stripped(self, manager):
+        data = b"abcdefghijkl"
+
+        task = DummyTask(task_def_id=0, msg=data)
+        task.has_crx = True
+        task.timeout = 0.1
+
+        await manager.open_task(task)
+        await manager.send_chunk(task, data)
+        
+        await asyncio.sleep(0.1)
+
+        assert task.state == TaskState.RETURNED
+        assert task.received_data[0] == data
+
+    @pytest.mark.asyncio
+    async def test_wrong_checksum_send_nack_if_need_ack(self, manager):
+        data = b"abcdefghijkl"
+
+        task = DummyTask(task_def_id=0, msg=data)
+        task.has_crx = True
+        task.timeout = 0.5
+
+        with patch(
+            "elasticai.experiment_framework.remote_control.message.Message.checksum",
+            new_callable=PropertyMock,
+        ) as checksum_mock:
+            checksum_mock.return_value = 0
+
+            original = manager._handle_nack
+
+            manager._handle_nack = AsyncMock(wraps=original)
+
+            open_task_coro = asyncio.create_task(manager.open_task(task, need_ack=True))
+            await asyncio.sleep(0.1)
+
+            await open_task_coro
+
+            manager._handle_nack.assert_called()
