@@ -78,9 +78,22 @@ bool frame_parser_feed(Receiver *p, uint8_t byte)
 
         if (p->index >= p->frame.header.payload_len)
         {
-            return true; // FRAME COMPLETE
+            if (p->frame.header.flags & FLAG_HAS_CRC)
+            {
+                p->state = WAIT_CHECKSUM;
+            }
+            else
+            {
+                return true; // FRAME COMPLETE
+            }
         }
         break;
+    }
+
+    case WAIT_CHECKSUM:
+    {
+        p->frame.payload[p->index++] = byte;
+        return true;
     }
     }
 

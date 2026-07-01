@@ -61,9 +61,26 @@ void tx_process(Sender *tx)
         }
         else
         {
-            tx->state = TX_DONE;
+            if (tx->frame.header.flags & FLAG_HAS_CRC)
+            {
+                tx->state = TX_SEND_CHECKSUM;
+            }
+            else
+            {
+                tx->state = TX_DONE;
+            }
         }
         break;
+
+    case TX_SEND_CHECKSUM:
+    {
+        uint8_t crc = crc8(tx->frame.payload,
+                           tx->frame.header.payload_len);
+
+        send_byte(tx, crc);
+        tx->state = TX_DONE;
+        break;
+    }
 
     case TX_DONE:
         tx->state = TX_IDLE;
@@ -71,10 +88,10 @@ void tx_process(Sender *tx)
     }
 }
 
-uint8_t send_return(TaskServices *task_s, uint8_t flags, uint32_t return_code)
+uint8_t send_return(TaskServices *task_s, uint8_t flags, uint32_t return_code, bool add_checksum)
 {
     Frame frame = {0};
-    frame_builder_return(&frame, flags, return_code, task_s->task_id);
+    frame_builder_return(&frame, flags, return_code, task_s->task_id, add_checksum);
 
     OutgoingOrder order = {
         .frame = frame,
@@ -83,10 +100,10 @@ uint8_t send_return(TaskServices *task_s, uint8_t flags, uint32_t return_code)
     ringbuffer_push(task_s->outgoing_rb, &order);
 }
 
-uint8_t send_data(TaskServices *task_s, uint8_t flags, uint8_t *data, uint32_t data_len)
+uint8_t send_data(TaskServices *task_s, uint8_t flags, uint8_t *data, uint32_t data_len, bool add_checksum)
 {
     Frame frame = {0};
-    frame_builder_data_chunk(&frame, flags, data, data_len, task_s->task_id, 0, 0);
+    frame_builder_data_chunk(&frame, flags, data, data_len, task_s->task_id, 0, 0, add_checksum);
 
     OutgoingOrder order = {
         .frame = frame,

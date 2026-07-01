@@ -28,8 +28,8 @@ struct TaskServices
     RingBuffer *outgoing_rb;
     uint8_t task_id;
 
-    uint8_t (*send_return)(TaskServices *task_s, uint8_t flags, uint32_t return_code);
-    uint8_t (*send_data)(TaskServices *task_s, uint8_t flags, uint8_t *data, uint32_t data_len);
+    uint8_t (*send_return)(TaskServices *task_s, uint8_t flags, uint32_t return_code, bool add_checksum);
+    uint8_t (*send_data)(TaskServices *task_s, uint8_t flags, uint8_t *data, uint32_t data_len, bool add_checksum);
 };
 
 typedef struct
