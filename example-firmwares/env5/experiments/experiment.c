@@ -1,21 +1,21 @@
 #include <sys/unistd.h>
 
-#include "EnV5HwController.h"
-#include "Flash.h"
-#include "UsbProtocolBase.h"
-#include "UsbProtocolCustomCommands.h"
+#include "eai/hal/EnV5HwController.h"
+#include "eai/flash/Flash.h"
+#include "eai/com/UsbProtocolBase.h"
+#include "eai/com/UsbProtocolCustomCommands.h"
 
 #include "CException.h"
 #include "pico/time.h"
-#include "I2c.h"
-#include "middleware.h"
-#include "Pac193xTypedefs.h"
+#include "eai/hal/I2c.h"
+#include "eai/fpga/middleware.h"
+#include "eai/sensor/Pac193xTypedefs.h"
 #include "experiment/Middleware.h"
 #include "config.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
-#include "EnV5HwConfiguration.h"
+#include "eai/hal/EnV5HwConfiguration.h"
 
 #define MAX_RETRIES 5
 

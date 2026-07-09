@@ -1,13 +1,13 @@
 #include "config.h"
-#include "EnV5HwConfiguration.h"
+#include "eai/hal/EnV5HwConfiguration.h"
 
 #include "pico/stdio_usb.h"
 #include "pico/time.h"
 #include "hardware/spi.h"
-#include "EnV5HwController.h"
-#include "Flash.h"
-#include "EnV5HwConfiguration.h"
-#include "UsbProtocolBase.h"
+#include "eai/hal/EnV5HwController.h"
+#include "eai/flash/Flash.h"
+#include "eai/hal/EnV5HwConfiguration.h"
+#include "eai/com/UsbProtocolBase.h"
 
 #include "experiment/Middleware.h"
 #include "experiment/SpiPico.h"

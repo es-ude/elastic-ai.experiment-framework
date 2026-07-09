@@ -7,10 +7,15 @@
   },
   "configurePresets": [
     {
-      "name": "host",
+      "name": "gen_ninja",
       "hidden": true,
       "generator": "Ninja",
-      "binaryDir": "build/${presetName}",
+      "binaryDir": "build/${presetName}"
+    },
+    {
+      "name": "host",
+      "hidden": true,
+      "inherits": "gen_ninja",
       "cacheVariables": {
         "ELASTIC_AI_TARGET": "HOST"
       }
@@ -26,8 +31,7 @@
     {
       "name": "env5_rev2",
       "hidden": true,
-      "generator": "Ninja",
-      "binaryDir": "build/${presetName}",
+      "inherits": "gen_ninja",
       "cacheVariables": {
         "ELASTIC_AI_TARGET": "ENV5_2"
       }

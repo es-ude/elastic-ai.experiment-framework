@@ -4,7 +4,7 @@
 
 #include <stdlib.h>
 
-#include "Gpio.h"
+#include "eai/hal/Gpio.h"
 
 typedef struct PicoSpi
 {

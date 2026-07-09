@@ -1,7 +1,7 @@
 #ifndef PRIVATEI2C_H
 #define PRIVATEI2C_H
 
-#include "I2cTypedefs.h"
+#include "eai/hal/I2cTypedefs.h"
 
 typedef struct I2cPico {
   I2cModule module;
