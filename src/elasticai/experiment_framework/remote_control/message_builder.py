@@ -10,11 +10,12 @@ class MessageBuilder:
     def __init__(self) -> None:
         self.data = b""
         self.byte_order: Literal["big", "little"] = "little"
-        self.command: Command = Command.NACK
+        self.command: Command
         self.task_def_id = 0
         self.task_id = 0
         self.msg_id = 0
         self.need_ack = False
+        self.has_crc = False
 
     def set_command(self, cmd: Command) -> "MessageBuilder":
         self.command = cmd
@@ -38,6 +39,10 @@ class MessageBuilder:
 
     def set_need_ack(self, ack: bool) -> "MessageBuilder":
         self.need_ack = ack
+        return self
+
+    def set_crc(self, has_crc: bool) -> "MessageBuilder":
+        self.has_crc = has_crc
         return self
 
     def build(self) -> Message:
@@ -66,7 +71,7 @@ class MessageBuilder:
         return Message(
             self.command,
             data,
-            flags=Flags(need_ack=self.need_ack).to_byte(),
+            flags=Flags(need_ack=self.need_ack, has_crc=self.has_crc).to_number(),
             task_id=self.task_id,
             msg_id=self.msg_id,
             byte_order=self.byte_order,

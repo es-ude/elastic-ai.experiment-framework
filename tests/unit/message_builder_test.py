@@ -55,13 +55,20 @@ def test_return_pass_through():
     assert msg.payload == data
 
 
-def test_flags_set_correctly():
+def test_need_ack_flag_set_correctly():
     builder = MessageBuilder().set_command(Command.OPEN_TASK).set_need_ack(True)
 
     msg = builder.build()
 
-    assert msg.header.flags.to_byte() & 0x1
-    assert msg.header.flags.to_byte() & 0x3
+    assert msg.header.flags.need_ack
+
+
+def test_has_crc_flag_set_correctly():
+    builder = MessageBuilder().set_command(Command.OPEN_TASK).set_crc(True)
+
+    msg = builder.build()
+
+    assert msg.header.flags.has_crc
 
 
 def test_task_id_passed():
