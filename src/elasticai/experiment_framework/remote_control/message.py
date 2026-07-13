@@ -1,7 +1,17 @@
+import logging
+from typing import Literal
+
+from crc import Calculator, Crc8
+
 from .commands import Command
-from .constants import HEADER_SIZE
+from .constants import HEADER_SIZE, NUM_BYTES_CHECKSUM
+from .exceptions import InvalidChecksumError
 from .flags import Flags
 from .header import Header
+
+_calculator = Calculator(Crc8.CCITT.value)
+
+_logger = logging.getLogger(__name__)
 
 
 class Message:
@@ -16,31 +26,81 @@ class Message:
     ) -> None:
         self.header = Header(
             command=command,
-            flags=Flags.from_byte(flags),
+            flags=Flags.from_number(flags),
             task_id=task_id,
             msg_id=msg_id,
             payload_len=len(payload),
         )
         self.payload = payload
         self.byte_order = byte_order
+        self._checksum: int | None = None
+
+    @property
+    def checksum(self) -> int:
+        if not self.header.flags.has_crc:
+            raise ValueError("Message does not have a CRC.")
+
+        if self._checksum is None:
+            data = self.header.to_bytes() + self.payload
+            self._checksum = _calculator.checksum(data)
+
+        return self._checksum
 
     def to_bytes(self) -> bytes:
-        return self.header.to_bytes() + self.payload
+        data = self.header.to_bytes() + self.payload
+
+        if self.header.flags.has_crc:
+            data += int.to_bytes(self.checksum, NUM_BYTES_CHECKSUM)
+
+        return data
 
     @classmethod
-    def from_bytes(cls, raw: bytes, byte_order: str = "little") -> "Message":
+    def from_bytes(
+        cls, raw: bytes, byte_order: Literal["little", "big"] = "little"
+    ) -> "Message":
         header = Header.from_bytes(raw[:HEADER_SIZE])
-
         payload = raw[HEADER_SIZE:]
 
+        if header.flags.has_crc:
+            received_crc = int.from_bytes(
+                payload[-NUM_BYTES_CHECKSUM:],
+                byteorder=byte_order,
+            )
+            payload = payload[:-NUM_BYTES_CHECKSUM]
+            message_without_crc = raw[:-NUM_BYTES_CHECKSUM]
+
+            message = cls(
+                command=header.command,
+                payload=payload,
+                flags=header.flags.to_number(),
+                task_id=header.task_id,
+                msg_id=header.msg_id,
+                byte_order=byte_order,
+            )
+
+            if not _calculator.verify(message_without_crc, received_crc):
+                _logger.error(
+                    "[Client] Invalid checksum, Header:%s, Payload: %s checksum=%s ",
+                    header,
+                    payload,
+                    received_crc,
+                )
+                raise InvalidChecksumError(message)
+
         if len(payload) != header.payload_len:
-            print(f" Message Header invalid, Hearder:{header}, Payload: {payload}")
-            raise ValueError(f" Message Header invalid, Hearder:{header}")
+            _logger.error(
+                "[Client] Message payload length invalid, Header:%s, payload:%s",
+                header,
+                payload,
+            )
+            raise ValueError(
+                f"[Client] Message payload length invalid, Header:{header}"
+            )
 
         return cls(
             command=header.command,
             payload=payload,
-            flags=header.flags.to_byte(),
+            flags=header.flags.to_number(),
             task_id=header.task_id,
             msg_id=header.msg_id,
             byte_order=byte_order,

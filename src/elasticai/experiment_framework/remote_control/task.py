@@ -24,6 +24,7 @@ class Task(ABC):
     def __init__(self, task_def_id: int) -> None:
         self.timeout: float = RESPONSE_TIMEOUT
         self.need_ack: bool = False
+        self.has_crx: bool = False
         self.task_def_id: int = task_def_id
 
         self._task_id: int = 0

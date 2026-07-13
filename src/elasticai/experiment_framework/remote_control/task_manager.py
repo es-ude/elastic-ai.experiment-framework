@@ -11,6 +11,7 @@ from .constants import (
     RETURN_CODE_OFFSET,
 )
 from .exceptions import (
+    InvalidChecksumError,
     MessageRetransmissionError,
     ReceivedNackError,
     UnexpectedMessageError,
@@ -48,7 +49,6 @@ class TaskManager:
         task._state = TaskState.OPENING
 
         task._task_id = task_id
-        msg_id = task._next_msg_id
 
         self._running_tasks[task_id] = task
 
@@ -57,14 +57,11 @@ class TaskManager:
         )
         await self._send_message(
             command=Command.OPEN_TASK,
-            task_id=task_id,
-            msg_id=msg_id,
-            task_def_id=task.task_def_id,
+            task=task,
             need_ack=need_ack,
         )
 
         task._state = TaskState.OPENED
-        task._next_msg_id += 1
 
         await self._run_callback(task, task.on_opened())
 
@@ -78,17 +75,13 @@ class TaskManager:
                 need_ack is None and task.need_ack
             )
 
-            msg_id = task._next_msg_id
             await self._send_message(
                 command=Command.CLOSE_TASK,
-                msg_id=msg_id,
-                task_id=task.task_id,
+                task=task,
                 need_ack=need_ack,
             )
 
             task._state = TaskState.CLOSED
-            task._next_msg_id += 1
-
             self._running_tasks.pop(task.task_id)
 
     async def send_chunk(
@@ -102,12 +95,10 @@ class TaskManager:
         try:
             await self._send_message(
                 command=Command.DATA_CHUNK,
-                task_id=task.task_id,
-                msg_id=msg_id,
+                task=task,
                 data=data,
                 need_ack=need_ack,
             )
-            task._next_msg_id += 1
 
         except ReceivedNackError:
             task._pending_acks.pop(msg_id, None)
@@ -160,13 +151,6 @@ class TaskManager:
         except Exception as e:
             _logger.error("[CLIENT]error handling message: %s", e)
             raise
-
-    async def _send_nack(self, msg: Message):
-        task_id = msg.header.task_id
-
-        await self._send_message(
-            command=Command.NACK, task_id=task_id, msg_id=msg.header.msg_id
-        )
 
     async def _handle_ack(
         self,
@@ -225,9 +209,7 @@ class TaskManager:
         task._state = TaskState.RECEIVED_DATA
 
         if flags.need_ack:
-            await self._send_message(
-                command=Command.ACK, task_id=task.task_id, msg_id=msg_id
-            )
+            await self._send_ack(message)
 
         await self._run_callback(task, task.on_data_chunk_received())
 
@@ -244,44 +226,39 @@ class TaskManager:
 
             flags = message.header.flags
 
-            if flags.need_ack:
-                await self._send_message(
-                    Command.ACK,
-                    task_id=task.task_id,
-                    msg_id=message.header.msg_id,
-                )
+        if flags.need_ack:
+            await self._send_ack(message)
 
         await self._run_callback(task, task.on_return())
 
     async def _send_message(
         self,
         command: Command,
-        task_id: int,
-        msg_id: int,
+        task: Task,
         *,
-        task_def_id: int = 0,
         data: bytes = b"",
         need_ack: bool = False,
     ) -> None:
+        msg_id = task._next_msg_id
+        task_id = task.task_id
+
         builder = (
             MessageBuilder()
             .set_command(command)
             .set_task_id(task_id)
             .set_msg_id(msg_id)
-            .set_task_def_id(task_def_id)
+            .set_task_def_id(task.task_def_id)
             .set_data(data)
             .set_need_ack(need_ack)
+            .set_crc(task.has_crx)
         )
 
         message = builder.build()
 
         await self._device.write(message)
-
-        if command == Command.ACK or command == Command.NACK:
-            return
+        task._next_msg_id += 1
 
         if need_ack:
-            task = self._running_tasks.get(task_id, None)
             if task is None:
                 raise RuntimeError(f"[client] no task found with id {task_id}")
             attempt = 0
@@ -292,6 +269,7 @@ class TaskManager:
                     task._pending_acks[msg_id] = fut
 
                     await asyncio.wait_for(fut=fut, timeout=self._timeout)
+
                     return
 
                 except ReceivedNackError:
@@ -311,6 +289,30 @@ class TaskManager:
             raise MessageRetransmissionError(
                 f"Failed to send the message after {NUM_MAX_RETRIES} retries:{message}"
             )
+
+    async def _send_nack(self, msg: Message):
+        task_id = msg.header.task_id
+
+        nack = (
+            MessageBuilder()
+            .set_command(Command.NACK)
+            .set_task_id(task_id)
+            .set_msg_id(msg.header.msg_id)
+        ).build()
+
+        await self._device.write(nack)
+
+    async def _send_ack(self, msg: Message):
+        task_id = msg.header.task_id
+
+        ack = (
+            MessageBuilder()
+            .set_command(Command.ACK)
+            .set_task_id(task_id)
+            .set_msg_id(msg.header.msg_id)
+        ).build()
+
+        await self._device.write(ack)
 
     async def _run_callback(self, task: Task, cb: AsyncIterable[CallbackAction]):
         async for action in cb:
@@ -341,7 +343,15 @@ class TaskManager:
         self._receiver_started.set()
 
         while self._running:
-            message = await self._device.read()
-            await self._on_message(message)
+            try:
+                message = await self._device.read()
+                await self._on_message(message)
 
+            except InvalidChecksumError as exc:
+                if exc.message.header.flags.need_ack:
+                    await self._send_nack(exc.message)
+            except Exception as exc:
+                _logger.warning(
+                    "[Client] Receive loop Execption has been raised %s", exc
+                )
         self._running = False
