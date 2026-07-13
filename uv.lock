@@ -348,6 +348,15 @@ wheels = [
 ]
 
 [[package]]
+name = "crc"
+version = "7.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7e/e6/c3488c35ecae290751466252e5ea01ef50fc67bfc1a9aba43983329b7025/crc-7.1.0.tar.gz", hash = "sha256:99dd540909a37ae4f62c65441df8ecb4e7f9af014fecaf4f331052a41d66c07d", size = 9888, upload-time = "2024-11-05T20:34:28.983Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/df/ff/5ebeae9b53e8cddd9e6f3b6b0c98da3f112d9a7e1ea638a00876aa8fb5b4/crc-7.1.0-py3-none-any.whl", hash = "sha256:b9845c81d0b900d8fda1aae7af977035bee0359c279713814e9fd23a2d59db6a", size = 8790, upload-time = "2024-11-05T20:34:27.629Z" },
+]
+
+[[package]]
 name = "cryptography"
 version = "47.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -450,6 +459,7 @@ source = { editable = "." }
 dependencies = [
     { name = "black" },
     { name = "click" },
+    { name = "crc" },
     { name = "fabric" },
     { name = "invoke" },
     { name = "isort" },
@@ -481,6 +491,7 @@ extra-dev = [
 requires-dist = [
     { name = "black", specifier = ">=26.3.1" },
     { name = "click", specifier = ">=8.3.1" },
+    { name = "crc", specifier = ">=7.1.0" },
     { name = "fabric", specifier = ">=3.2.2" },
     { name = "invoke", specifier = ">=2.2.1" },
     { name = "isort", specifier = ">=8.0.1" },
