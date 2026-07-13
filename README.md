@@ -41,31 +41,28 @@ $ eaixp --help
 
 ### Communicating with the elastic node via elasticai runtime
 
-1. Checkout the [elastic ai runtime](https://github.com/es-ude/elastic-ai.runtime.enV5/)
-   ```bash
-    $ git clone git@github.com:es-ude/elastic-ai.runtime.enV5.git
-    $ cd elastic-ai.runtime.env5
-   ```
-2. build the firmware either directly (make sure to have gcc-arm-noneabi available)
-   ```bash
-    $ cmake --preset env5_rev2_release
-    $ cmake --build --preset env5_rev2_release
-   ```
-   alternatively with devenv
-  ```bash
-   $ devenv tasks run -m before build
-  ```
-3. set the hardware to bootloader mode, e.g., by cycling power, while holding the boot button
-4. copy the firmware to the device, e.g.,
-  ```bash
-  $ cp build/env5_rev2_release/test\
-    /hardware/TestUsbProtocol/HardwareTestUsbProtocol.uf2\
-    /var/Volume/RP2
-  ```
-5. run the remote control
-  ```bash
-  uv run python -m elasticai.tester.remote_control -h
-  ```
+Ensure you have the following tools installed
+
+- cmake
+- gcc-arm-embedded-none-eabi (version 13 or higher)
+
+Then you can start off with the example in this repository under `example-firmware/env5`.
+Build the firmware using 
+
+ ```bash
+  $ cmake --preset env5_rev2_release
+  $ cmake --build --preset env5_rev2_release
+ ```
+
+and copy to the device like so
+
+```bash
+$ cp build/env5_rev2_release\
+  /experiments/env5_experiment_firmware.uf2\
+  /var/Volume/RP2
+```
+
+
 
 
 ## Extend the remote control CLI
@@ -80,7 +77,7 @@ import click
 @rc.main.command
 @click.pass_obj
 @click.argument("data", type=str)
-def my_custom_command(obj):
+def my_custom_command(obj, data):
   rc_handle = rc.RemoteControl(obj)
   my_cmd_id = 250
   result = rc_handle.send_command(my_cmd_id, data, len(data))
