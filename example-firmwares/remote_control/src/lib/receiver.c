@@ -53,6 +53,7 @@ bool frame_parser_feed(Receiver *p, uint8_t byte)
 
         if (len > MAX_PAYLOAD)
         {
+            LOG("[Receiver] Error: Payload length %u exceeds maximum allowed %u. Resetting parser state.\n", len, MAX_PAYLOAD);
             p->state = WAIT_START;
             break;
         }
