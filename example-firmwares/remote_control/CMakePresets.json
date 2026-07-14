@@ -9,7 +9,7 @@
       "binaryDir": "${sourceDir}/build/host-debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "PLATFORM": "host"
+        "ELASTIC_AI_TARGET": "HOST"
       }
     },
     {
@@ -19,9 +19,8 @@
       "binaryDir": "${sourceDir}/build/pico-debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "PLATFORM": "pico",
-        "PICO_PLATFORM": "rp2040",
-        "CMAKE_TOOLCHAIN_FILE": "$env{PICO_SDK_PATH}/cmake/preload/toolchains/pico_arm_cortex_m0plus_gcc.cmake"
+        "ELASTIC_AI_TARGET": "ENV5_2",
+        "PICO_PLATFORM": "rp2040"
       }
     }
   ],

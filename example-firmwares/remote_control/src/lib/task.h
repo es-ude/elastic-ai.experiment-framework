@@ -36,7 +36,7 @@ typedef struct
 {
     TaskServices task_services;
 
-    uint16_t step_index;
+    uint16_t step_counter;
 
     /* --- function execution --- */
     uint8_t input_data[TASK_BUFFER_LEN_BYTE];
@@ -44,6 +44,7 @@ typedef struct
     uint8_t output_data[TASK_BUFFER_LEN_BYTE];
     uint32_t output_data_len;
 
+    void *user_data;
 } TaskContext;
 
 typedef void (*Func)(TaskContext *task_context);

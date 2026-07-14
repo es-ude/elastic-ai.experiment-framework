@@ -4,6 +4,7 @@
 #include "ringbuffer.h"
 #include "frame.h"
 #include "msg_types.h"
+#include "task_definitions.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -48,7 +49,7 @@ void setUp(void)
     ringbuffer_init(&task_rb, rb_storage, RB_CAPACITY, sizeof(Task *));
     ringbuffer_init(&out_rb, out_storage, RB_CAPACITY, sizeof(Frame));
 
-    init_task_manager(&out_rb, &task_manager); // global task pool reset
+    init_task_manager(&out_rb, &task_manager, task_definition_table, task_definition_table_size); // global task pool reset
 }
 
 void tearDown(void)
@@ -121,6 +122,14 @@ void test_receive_datachunk_accumulates_data(void)
     TEST_ASSERT_EQUAL_UINT8(0x42, t->ctx.input_data[0]);
 }
 
+void test_get_task_definition_returns_registered_entry(void)
+{
+    TaskDefinition *td = get_task_definition(0);
+
+    TEST_ASSERT_NOT_NULL(td);
+    TEST_ASSERT_EQUAL_PTR(task_definition_table[0].handle, td->handle);
+}
+
 /* -------- process_tasks -------- */
 
 static void dummy_run(TaskContext *task_context)
@@ -161,6 +170,7 @@ int main(void)
     RUN_TEST(test_start_task_sets_running_and_enqueues);
     RUN_TEST(test_finish_resets_task);
     RUN_TEST(test_receive_datachunk_accumulates_data);
+    RUN_TEST(test_get_task_definition_returns_registered_entry);
     RUN_TEST(test_process_tasks_executes_task);
 
     return UNITY_END();
