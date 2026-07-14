@@ -1,6 +1,7 @@
 #include "sender.h"
 #include "frame_builder.h"
 #include "log.h"
+#include "msg_types.h"
 
 #include <stdio.h>
 
@@ -36,7 +37,7 @@ void tx_process(Sender *tx)
         uint8_t transaction_id = tx->frame.header.transaction_id;
         send_byte(tx, transaction_id);
 
-        if (tx->is_retransmitting)
+        if (tx->is_retransmitting || tx->frame.header.message_type == ACK || tx->frame.header.message_type == NACK)
         {
             send_byte(tx, tx->frame.header.msg_id); // msg_id already exists
         }
