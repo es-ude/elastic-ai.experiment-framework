@@ -5,7 +5,7 @@
 
 #define FRAME_OVERHEAD 7
 #define CHECKSUM_SIZE 1
-#define MAX_PAYLOAD 256
+#define MAX_PAYLOAD 512
 
 // Flags. |= to set, & to check
 #define FLAG_NEED_ACK (1 << 0)

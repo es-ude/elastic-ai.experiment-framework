@@ -1,62 +1,15 @@
-#include "task_definitions.h"
-#include "msg_types.h"
-#include "frame_builder.h"
-#include "log.h"
+#include "task_manager.h"
 
-#include <stdio.h>
-#include <string.h>
+#ifdef PLATFORM_PICO
+#include "task_definitions_pico.h"
+#endif
 
-void default_setup(TaskContext *task_context)
-{
-    LOG("Task %i was setup\n", task_context->task_services.task_id);
-}
-
-void default_teardown(TaskContext *task_context)
-{
-    LOG("Task %i was torn down\n", task_context->task_services.task_id);
-}
-
-void send_mirror_reply(TaskContext *task_context)
-{
-    LOG("send_mirror_reply called\n");
-    memcpy(task_context->output_data, task_context->input_data, task_context->input_data_len);
-    task_context->output_data_len = task_context->input_data_len;
-
-    LOG("Output data len: %d\n", task_context->output_data_len);
-    LOG("Preparing response frame with payload\n");
-
-    task_context->task_services.send_data(&task_context->task_services, 0, task_context->output_data, task_context->output_data_len, false);
-
-    LOG("task 1 %p", (void *)task_context);
-    LOG("Preparing response frame with payload onto ringbuffer %p\n", (void *)task_context->task_services.outgoing_rb);
-
-    LOG("Prepared return frame\n");
-
-    task_context->task_services.send_return(&task_context->task_services, 0, 0, false);
-}
-
-void func1(TaskContext *task_context)
-{
-    LOG("Function 1 executed\n");
-    char *msg = "func1 called";
-}
-
-void request_ack_from_pc(TaskContext *task_context)
-{
-    char *msg = "test data";
-
-    task_context->task_services.send_data(&task_context->task_services, FLAG_NEED_ACK, (uint8_t *)msg, strlen(msg), false);
-}
-
-void fast_setup_ack_from_pc(TaskContext *task_context)
-{
-    request_ack_from_pc(task_context);
-}
+#include "task_definition_host.h"
 
 // Contains the functions that should be callable from the client_protocol via execute_function,
 // position determines function_id
 
-static TaskDefinition task_definition_table[] = {
+TaskDefinition task_definition_table[] = {
     {.setup = default_setup,
      .tear_down = default_teardown,
      .handle = send_mirror_reply},
@@ -65,23 +18,29 @@ static TaskDefinition task_definition_table[] = {
      .handle = func1},
     {.setup = default_setup,
      .handle = request_ack_from_pc,
-     .tear_down = default_teardown}};
+     .tear_down = default_teardown}
+#ifdef PLATFORM_PICO
+    ,
+    {.setup = fast_setup_hardware_init,
+     .handle = hardware_init,
+     .tear_down = default_teardown},
+    {.setup = fast_setup_fpga_power_on,
+     .handle = fpga_power_on,
+     .tear_down = default_teardown},
+    {.setup = fast_setup_fpga_power_off,
+     .handle = fpga_power_off,
+     .tear_down = default_teardown},
+    {.setup = default_setup,
+     .handle = write_to_flash_from_remote,
+     .tear_down = default_teardown},
+    {.setup = default_setup,
+     .handle = read_skeletion_id,
+     .tear_down = default_teardown},
+    {.setup = default_setup,
+     .handle = predict,
+     .tear_down = default_teardown}
+#endif
+};
 
-static UserTasks user_task_defintions = {.task_definitions = task_definition_table,
-                                         .size = sizeof(task_definition_table)};
-
-TaskDefinition *get_task_definition(uint32_t task_definition_id)
-{
-    if (user_task_defintions.size == 0)
-    {
-        LOG("no task definitions are set");
-        return NULL;
-    }
-
-    if (task_definition_id < 0 || task_definition_id >= user_task_defintions.size / sizeof(TaskDefinition))
-    {
-        LOG("Invalid function ID: %d\n", task_definition_id);
-        return NULL;
-    }
-    return &user_task_defintions.task_definitions[task_definition_id];
-}
+const size_t task_definition_table_size =
+    sizeof(task_definition_table) / sizeof(task_definition_table[0]);
