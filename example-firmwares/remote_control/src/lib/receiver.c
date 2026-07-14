@@ -53,21 +53,34 @@ bool frame_parser_feed(Receiver *p, uint8_t byte)
 
         if (len > MAX_PAYLOAD)
         {
+            LOG("[Receiver] Error: Payload length %u exceeds maximum allowed %u. Resetting parser state.\n", len, MAX_PAYLOAD);
             p->state = WAIT_START;
             break;
         }
 
-        if (p->frame.header.payload_len == 0)
-        {
-            return true; // FRAME COMPLETE
-        }
-
         p->index = 0;
-        p->state = WAIT_PAYLOAD;
-        LOG("LEN BYTES: %02X %02X -> LEN=%u\n",
-            p->len_bytes[1],
-            p->len_bytes[0],
-            p->frame.header.payload_len);
+
+        if (len == 0)
+        {
+            if (p->frame.header.flags & FLAG_HAS_CRC)
+            {
+                // No payload; the next byte is the checksum.
+                p->state = WAIT_CHECKSUM;
+            }
+            else
+            {
+                // No payload and no checksum: frame is complete.
+                return true;
+            }
+        }
+        else
+        {
+            p->state = WAIT_PAYLOAD;
+            LOG("LEN BYTES: %02X %02X -> LEN=%u\n",
+                p->len_bytes[1],
+                p->len_bytes[0],
+                p->frame.header.payload_len);
+        }
 
         break;
     }
