@@ -23,13 +23,24 @@ HEADER_ERRORS = (
 
 
 class MessageIO:
+    incoming_logger = logging.getLogger(
+        "elasticai.experiment_framework.remote_control.traffic.message.incoming"
+    )
+    outgoing_logger = logging.getLogger(
+        "elasticai.experiment_framework.remote_control.traffic.message.outgoing"
+    )
+    raw_incoming_logger = logging.getLogger(
+        "elasticai.experiment_framework.remote_control.traffic.raw.incoming"
+    )
+
     def __init__(self, stream: IOStream):
         self._stream = stream
-        self._logger = logging.getLogger(__name__)
 
     async def _do_read(self, num_bytes) -> bytes:
         data = await self._stream.read(num_bytes)
-        self._logger.debug(f"[CLIENT] read data {num_bytes} bytes {data}", stacklevel=2)
+        self.raw_incoming_logger.debug(
+            f"[CLIENT] read data {num_bytes} bytes {data}", stacklevel=2
+        )
         return bytes(data)
 
     async def _sync(self) -> bytes:
@@ -40,32 +51,26 @@ class MessageIO:
             self._logger.warning("[CLIENT] resync: discarding byte %r", b)
 
     async def read(self) -> Message:
-        sync = await self._sync()
+        header_bytes = await self._do_read(HEADER_SIZE)
+        self.raw_incoming_logger.debug(
+            "[CLIENT] received header: %s", header_bytes.hex(), stacklevel=3
+        )
+        header = Header.from_bytes(header_bytes)
 
-        try:
-            header_bytes = sync + await self._do_read(HEADER_SIZE - 1)
-            header = Header.from_bytes(header_bytes)
-        except HEADER_ERRORS as exc:
-            self._logger.warning("[CLIENT] failed to parse header: %s", exc)
-            raise MessageFramingError("malformed header, stream resynced") from exc
+        payload = await self._do_read(header.payload_len)
+        self.raw_incoming_logger.debug(
+            "[CLIENT] received payload: %s", payload.hex(), stacklevel=3
+        )
 
-        try:
-            payload = await self._do_read(header.payload_len)
-            msg = Message.from_bytes(header_bytes + payload)
-            self._logger.debug(
-                "[CLIENT] received message: %s", format_message(msg), stacklevel=3
-            )
-            return msg
-        except InvalidChecksumError:
-            raise
-        except Exception as exc:
-            self._logger.warning("[CLIENT] failed to parse message: %s", exc)
-            raise MessageFramingError(
-                "malformed message, stream resynced to next sync byte"
-            ) from exc
+        msg = Message.from_bytes(header_bytes + payload)
+        self.incoming_logger.debug(
+            "[CLIENT] received message: %s", format_message(msg), stacklevel=3
+        )
+
+        return msg
 
     async def write(self, msg: Message) -> None:
-        self._logger.debug(
+        self.outgoing_logger.debug(
             "[CLIENT] sending message: %s", format_message(msg), stacklevel=3
         )
         await self._stream.write(msg.to_bytes())
