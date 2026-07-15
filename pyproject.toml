@@ -82,6 +82,14 @@ testpaths = ["tests"]
 markers = [
     "hardware: requires physical hardware to be connected",
 ]
+log_cli = true
+log_cli_level = "DEBUG"
+log_file = "logs"
+log_file_level = "DEBUG"
+addopts = [
+    "--log-disable=elasticai.experiment_framework.remote_control.traffic.raw.incoming",
+    "--log-disable=elasticai.experiment_framework.remote_control.traffic.raw.outgoing",
+]
 
 [tool.ruff]
 exclude = [

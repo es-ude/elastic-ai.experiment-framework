@@ -1,6 +1,7 @@
 #include "sender.h"
 #include "frame_builder.h"
 #include "log.h"
+#include "msg_types.h"
 
 #include <stdio.h>
 
@@ -36,7 +37,7 @@ void tx_process(Sender *tx)
         uint8_t transaction_id = tx->frame.header.transaction_id;
         send_byte(tx, transaction_id);
 
-        if (tx->is_retransmitting)
+        if (tx->is_retransmitting || tx->frame.header.message_type == ACK || tx->frame.header.message_type == NACK)
         {
             send_byte(tx, tx->frame.header.msg_id); // msg_id already exists
         }
@@ -202,8 +203,6 @@ void retransmit_unacked(Sender *tx, uint32_t current_time_s)
 
 void process_tx(Sender *tx)
 {
-    tx->transport = tx->transport;
-
     retransmit_unacked(tx, transport_get_current_time());
 
     if (tx->state == TX_IDLE)
@@ -212,12 +211,18 @@ void process_tx(Sender *tx)
 
         if (ringbuffer_pop(tx->outgoing_rb, &order))
         {
-            if (order.frame.header.flags & FLAG_NEED_ACK && !order.is_retransmit)
-            {
-                add_to_unacked(tx, &order.frame);
-            }
+
             tx_start(tx, &order.frame, order.is_retransmit); // start the parsing of the frame and sending it out
         }
     }
     tx_process(tx);
+    if (tx->state == TX_DONE)
+    {
+        if (tx->frame.header.flags & FLAG_NEED_ACK && !tx->is_retransmitting)
+        {
+            add_to_unacked(tx, &tx->frame);
+        }
+
+        tx->state = TX_IDLE;
+    }
 }
