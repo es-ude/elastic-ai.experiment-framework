@@ -226,10 +226,10 @@ class TaskManager:
 
             flags = message.header.flags
 
-        if flags.need_ack:
-            await self._send_ack(message)
+            if flags.need_ack:
+                await self._send_ack(message)
 
-        await self._run_callback(task, task.on_return())
+            await self._run_callback(task, task.on_return())
 
     async def _send_message(
         self,
@@ -256,7 +256,7 @@ class TaskManager:
         message = builder.build()
 
         await self._device.write(message)
-        task._next_msg_id += 1
+        task._next_msg_id = (task._next_msg_id + 1) % 0xFF
 
         if need_ack:
             if task is None:
@@ -345,13 +345,16 @@ class TaskManager:
         while self._running:
             try:
                 message = await self._device.read()
+
                 await self._on_message(message)
 
             except InvalidChecksumError as exc:
                 if exc.message.header.flags.need_ack:
                     await self._send_nack(exc.message)
             except Exception as exc:
-                _logger.warning(
-                    "[Client] Receive loop Execption has been raised %s", exc
+                _logger.error(
+                    "An exception has been raised: %r",
+                    exc,
+                    exc_info=True,
                 )
         self._running = False

@@ -22,3 +22,4 @@ void ringbuffer_init(RingBuffer *rb,
 bool ringbuffer_push(RingBuffer *rb, const void *item);
 bool ringbuffer_pop(RingBuffer *rb, void *out);
 int ringbuffer_size(RingBuffer *rb);
+int ringbuffer_free_space(RingBuffer *rb);

@@ -4,7 +4,9 @@ from typing import Callable, cast
 
 from .io_stream import IOStream
 
-_logger = logging.getLogger(__name__)
+_logger = logging.getLogger(
+    "elasticai.experiment_framework.remote_control.traffic.raw.outgoing"
+)
 
 
 class SerialTransportStream(asyncio.Protocol, IOStream):
@@ -24,7 +26,9 @@ class SerialTransportStream(asyncio.Protocol, IOStream):
 
     def data_received(self, data: bytes) -> None:
         self._buffer.extend(data)
+        
         self.pause_reading()
+        
         if self._waiter is not None and not self._waiter.done():
             self._waiter.set_result(None)
 

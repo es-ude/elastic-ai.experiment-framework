@@ -52,11 +52,11 @@ static void usb_poll_rx(Transport *self)
     UsbTransportImpl *impl =
         (UsbTransportImpl *)self->impl;
 
-    int limit = 64;
+    uint32_t rb_free_size = ringbuffer_free_space(impl->rb);
 
-    while (limit--)
+    while (rb_free_size > 0)
     {
-        int c = getchar_timeout_us(0);
+        int c = stdio_getchar_timeout_us(0);
 
         if (c == PICO_ERROR_TIMEOUT)
             break;
@@ -64,6 +64,7 @@ static void usb_poll_rx(Transport *self)
         uint8_t b = (uint8_t)c;
 
         ringbuffer_push(impl->rb, &b);
+        rb_free_size--;
     }
 }
 
