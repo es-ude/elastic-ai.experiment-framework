@@ -6,6 +6,7 @@
 #include "msg_types.h"
 #include "sender.h"
 #include "frame_builder.h"
+#include "task_definitions.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -49,7 +50,7 @@ void setUp(void)
     ringbuffer_init(&task_rb, task_rb_storage, 1024, sizeof(Task *));
     ringbuffer_init(&out_rb, out_storage, 1024, sizeof(Frame));
 
-    init_task_manager(&out_rb, &task_manager);
+    init_task_manager(&out_rb, &task_manager, task_definition_table, task_definition_table_size);
     tx = (Sender){
         .transport = &transport_protocol,
         .outgoing_rb = &out_rb,

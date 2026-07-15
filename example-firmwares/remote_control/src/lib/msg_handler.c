@@ -79,6 +79,7 @@ void send_ack(Frame *frame, Sender *tx, enum AckType ack_type)
     {
         data_id = frame->payload[0]; // For data chunks, the data ID is in the first byte of the payload
     }
+    data_id = frame->header.msg_id; // For ACK, use the msg_id of the received frame
 
     Frame ack_frame = {0};
     if (ack_type == SEND_ACK)
