@@ -1,4 +1,9 @@
-from contextlib import _AsyncGeneratorContextManager, asynccontextmanager
+import asyncio
+from contextlib import (
+    _AsyncGeneratorContextManager,
+    asynccontextmanager,
+    contextmanager,
+)
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -40,6 +45,19 @@ class _SerialDevice(Device):
             baudrate=self._baudrate,
         ) as stream:
             yield stream
+
+    @contextmanager
+    def connect_sync(self):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        ctx = self.connect()
+        stream = loop.run_until_complete(ctx.__aenter__())
+        try:
+            yield stream
+        finally:
+            loop.run_until_complete(ctx.__aexit__(None, None, None))
+            loop.close()
 
 
 def probe_for_devices(specs: set[_DeviceSpec]) -> list[Device]:

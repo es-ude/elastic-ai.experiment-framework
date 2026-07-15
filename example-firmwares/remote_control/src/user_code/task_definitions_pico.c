@@ -190,6 +190,12 @@ void write_to_flash_from_remote(TaskContext *task_context)
 
     if (task_context->step_counter == 0)
     {
+        Fpga *fpga = Config_getFpga();
+        if (Fpga_isPoweredOn(fpga))
+        {
+            Fpga_powerOff(fpga);
+        }
+
         task_context->user_data = malloc(sizeof(UserDataStruct));
         UserDataStruct *user_data = (UserDataStruct *)task_context->user_data;
         user_data->written_bytes = 0;
@@ -251,8 +257,8 @@ void predict(TaskContext *task_context)
     {
         Fpga_powerOn(fpga);
         sleep_ms(100); // wait for FPGA to power up
-        // char *msg = "power_fpga";
-        // task_context->task_services.send_data(&task_context->task_services, 0, msg, 10, false);
+        char *msg = "power_fpga";
+        task_context->task_services.send_data(&task_context->task_services, 0, msg, 10, false);
     }
     FpgaMiddleware *fpga_middleware = Config_getFpgaMiddleware();
     FpgaMiddleware_init(fpga_middleware);

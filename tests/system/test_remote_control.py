@@ -81,10 +81,12 @@ def build_server():
 def c_server(build_server):
 
     _logger.info(
-        f"Starting server: /build/host-debug/remote_control {SERVER_HOST} {SERVER_PORT}"
+        f"""Starting server: /build/host-debug/src/app/remote_control 
+        {SERVER_HOST} 
+        {SERVER_PORT}"""
     )
     proc = subprocess.Popen(
-        ["./build/host-debug/remote_control", SERVER_HOST, str(SERVER_PORT)],
+        ["./build/host-debug/src/app/remote_control", SERVER_HOST, str(SERVER_PORT)],
         cwd=SERVER_CMAKE,
         text=True,
     )

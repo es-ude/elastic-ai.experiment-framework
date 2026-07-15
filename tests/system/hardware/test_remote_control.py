@@ -1,7 +1,5 @@
 import asyncio
 import logging
-import os
-import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -43,7 +41,7 @@ PICO_USB_ID = "2e8a:0003"
 
 SERVER_CMAKE = "example-firmwares/remote_control"
 PICO_BUILD_DIR = Path(SERVER_CMAKE) / "build" / "pico-debug"
-PICO_UF2 = PICO_BUILD_DIR / "remote_control_pico.uf2"
+PICO_UF2 = PICO_BUILD_DIR / "src" / "app" / "remote_control.uf2"
 
 
 @pytest.fixture(scope="session", autouse=False)
@@ -51,8 +49,8 @@ def build_pico_firmware():
     configure = subprocess.run(
         ["cmake", "--preset", "pico-debug"],
         cwd=SERVER_CMAKE,
-        capture_output=True,
-        text=True,
+        # capture_output=True,
+        # text=True,
     )
     if configure.returncode != 0:
         pytest.fail(f"CMake configure (pico) failed:\n{configure.stderr}")
@@ -60,8 +58,8 @@ def build_pico_firmware():
     build = subprocess.run(
         ["cmake", "--build", "--preset", "pico-debug", "--clean-first"],
         cwd=SERVER_CMAKE,
-        capture_output=True,
-        text=True,
+        # capture_output=True,
+        # text=True,
     )
     if build.returncode != 0:
         pytest.fail(
@@ -91,45 +89,19 @@ def wait_for_device(timeout=10):
 
 @pytest.fixture(scope="session")
 def flashed_pico(build_pico_firmware):
+    flash = subprocess.run(
+        ["picotool", "load", str(PICO_UF2), "-f"],
+        # capture_output=True,
+        # text=True,
+    )
 
-    def pico_in_bootsel():
-        return (
-            PICO_USB_ID
-            in subprocess.run(["lsusb"], capture_output=True, text=True).stdout
+    if flash.returncode != 0:
+        pytest.fail(
+            "Failed to flash the Pico.\n\n"
+            f"stdout:\n{flash.stdout}\n"
+            f"stderr:\n{flash.stderr}\n\n"
+            "Make sure picotool is installed and the Pico is connected."
         )
-
-    def find_rp2_mount():
-        for base in ["/media", "/run/media", "/mnt"]:
-            if os.path.exists(base):
-                for root, dirs, _ in os.walk(base):
-                    for d in dirs:
-                        if "RPI-RP2" in d:
-                            return os.path.join(root, d)
-        return None
-
-    if pico_in_bootsel():
-        mount = find_rp2_mount()
-
-        if mount:
-            print("BOOTSEL detected → copying UF2")
-            shutil.copy(PICO_UF2, mount)
-        else:
-            print("BOOTSEL detected but mount not found")
-    else:
-        print("Normal mode → using picotool")
-        flash = subprocess.run(
-            ["picotool", "load", str(PICO_UF2), "-f"],
-            capture_output=True,
-            text=True,
-        )
-        if flash.returncode != 0:
-            pytest.fail(
-                "Failed to flash the Pico.\n\n"
-                f"stdout:\n{flash.stdout}\n"
-                f"stderr:\n{flash.stderr}\n\n"
-                "If you're on Linux, make sure the RP2040 udev rules are installed "
-                "and the device is connected."
-            )
 
 
 class DummyTask(Task):
@@ -299,3 +271,55 @@ class TestSerialClient:
             await open_task_coro
 
             manager._handle_nack.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_flash(self, manager, monkeypatch):
+        data = b"\xcc\xf5\x07\x00"
+
+        task = DummyTask(task_def_id=9, msg=data)
+        task.timeout = 0.1
+
+        await manager.open_task(task)
+
+        await manager.send_chunk(task, data)
+
+        await asyncio.sleep(10)
+
+        assert task.received_data[0] == data
+
+    @pytest.mark.asyncio
+    async def test_get_hardware_id(self, manager, monkeypatch):
+        data = b"0"
+
+        task = DummyTask(task_def_id=7, msg=data)
+        task.timeout = 0.1
+
+        await manager.open_task(task)
+
+        await asyncio.sleep(1)
+
+        assert task.received_data[0] != data
+
+    @pytest.mark.asyncio
+    async def test_predict(self, manager, monkeypatch):
+        data = b"\xcc\xf5\x07\x00"
+
+        task = DummyTask(task_def_id=9, msg=data)
+        task.timeout = 0.1
+
+        await manager.open_task(task)
+        await manager.send_chunk(task, data)
+
+        await asyncio.sleep(10)
+
+        assert task.received_data[0] == data
+
+        data = b"\x01\xff"
+
+        task = DummyTask(task_def_id=8, msg=data)
+        task.timeout = 0.1
+        await manager.open_task(task)
+        await manager.send_chunk(task, data)
+        await asyncio.sleep(0.3)
+
+        assert b"\x01" == task.received_data[1]
