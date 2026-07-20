@@ -24,7 +24,9 @@ class SerialTransportStream(asyncio.Protocol, IOStream):
 
     def data_received(self, data: bytes) -> None:
         self._buffer.extend(data)
+
         self.pause_reading()
+
         if self._waiter is not None and not self._waiter.done():
             self._waiter.set_result(None)
 

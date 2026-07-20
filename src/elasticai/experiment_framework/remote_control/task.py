@@ -1,5 +1,5 @@
 import asyncio
-from abc import ABC, abstractmethod
+from abc import ABC
 from enum import Enum, auto
 from typing import AsyncGenerator, Dict
 
@@ -49,22 +49,20 @@ class Task(ABC):
     def received_data(self) -> dict[int, bytes]:
         return self._received_data
 
-    async def wait_for_return(self) -> int:
+    async def wait_for_return(self, timeout: float | None = 10) -> int:
         if self._completion is None:
             raise RuntimeError("Task has not been opened")
 
         return await asyncio.wait_for(
             asyncio.shield(self._completion),
-            timeout=self.timeout,
+            timeout=timeout,
         )
 
     async def on_opened(self) -> AsyncGenerator[CallbackAction, None]:
         yield NoAction()
 
-    @abstractmethod
     async def on_data_chunk_received(self) -> AsyncGenerator[CallbackAction, None]:
         yield NoAction()
 
-    @abstractmethod
     async def on_return(self) -> AsyncGenerator[CallbackAction, None]:
         yield NoAction()
