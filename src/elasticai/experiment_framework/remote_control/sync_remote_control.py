@@ -14,7 +14,7 @@ class SyncRemoteControl:
 
     def __enter__(self):
         self._loop.run_until_complete(self._manager.start())
-        self._initialize()
+        self.initialize()
         return self
 
     def __exit__(self, exc_type, exc, tb):
@@ -35,5 +35,5 @@ class SyncRemoteControl:
         finally:
             self._loop.run_until_complete(self._manager.close_task(task))
 
-    def _initialize(self):
+    def initialize(self):
         pass
