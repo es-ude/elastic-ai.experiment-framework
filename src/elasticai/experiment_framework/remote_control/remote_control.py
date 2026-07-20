@@ -1,4 +1,5 @@
 import logging
+from abc import abstractmethod
 
 from ..remote_control.constants import SUCCESS_CODE
 from ..remote_control.io_stream import IOStream
@@ -15,7 +16,7 @@ class RemoteControl:
 
     async def __aenter__(self):
         await self._manager.start()
-        await self._initialize()
+        await self.initialize()
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
@@ -35,5 +36,6 @@ class RemoteControl:
         finally:
             await self._manager.close_task(task)
 
-    async def _initialize(self):
+    @abstractmethod
+    async def initialize(self):
         pass
