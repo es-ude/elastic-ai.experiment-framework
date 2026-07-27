@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from typing import AsyncGenerator
 
 import serial_asyncio
 
@@ -23,7 +23,7 @@ class ConnectionProvider:
     @asynccontextmanager
     async def connectTCP(
         self, host: str, port: int, max_trials: int | None = None
-    ) -> AsyncIterator[IOStream]:
+    ) -> AsyncGenerator[IOStream, None]:
         if max_trials is not None:
             self._max_trials = max_trials
 
@@ -62,7 +62,7 @@ class ConnectionProvider:
     @asynccontextmanager
     async def connectSerial(
         self, port: str, baudrate: int, max_trials: int | None = None
-    ) -> AsyncIterator[IOStream]:
+    ) -> AsyncGenerator[IOStream, None]:
         if max_trials is not None:
             self._max_trials = max_trials
         loop = asyncio.get_running_loop()
