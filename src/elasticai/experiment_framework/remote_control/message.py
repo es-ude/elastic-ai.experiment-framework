@@ -5,7 +5,7 @@ from crc import Calculator, Crc8
 
 from .commands import Command
 from .constants import HEADER_SIZE, NUM_BYTES_CHECKSUM
-from .exceptions import InvalidChecksumError
+from .exceptions import InvalidChecksumError, InvalidPayloadLenError
 from .flags import Flags
 from .header import Header
 
@@ -93,9 +93,7 @@ class Message:
                 header,
                 payload,
             )
-            raise ValueError(
-                f"[Client] Message payload length invalid, Header:{header}"
-            )
+            raise InvalidPayloadLenError
 
         return cls(
             command=header.command,
@@ -109,7 +107,7 @@ class Message:
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Message):
             raise ValueError()
-        return self.header == other.header and self.payload == other.payload
+        return self.to_bytes() == other.to_bytes()
 
     def __repr__(self) -> str:
         return (
