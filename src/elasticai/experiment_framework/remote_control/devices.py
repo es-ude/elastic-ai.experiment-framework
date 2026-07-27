@@ -19,14 +19,7 @@ class Device(Protocol):
     @property
     def name(self) -> str: ...
 
-<<<<<<< conflict 1 of 1
-+++++++ npqnvxmo 84f37ca9 "test: Pico USB Proctocol" (rebase destination)
     def connect(self) -> _AsyncGeneratorContextManager[IOStream, None]: ...
-%%%%%%% diff from: rrppvyxq d2057ffa "feat: adding checksum  crc error detection" (parents of rebased revision)
-\\\\\\\        to: rqyrqquu 26fe64f5 "fix: proper error handling" (rebased revision)
--    def connect(self) -> AsyncGenerator[IOStream]: ...
-+    def connect(self) -> AsyncGenerator[IOStream, None]: ...
->>>>>>> conflict 1 of 1 ends
 
 
 class _SerialDevice(Device):
