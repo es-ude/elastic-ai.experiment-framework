@@ -12,9 +12,7 @@ from .constants import (
 )
 from .exceptions import (
     InvalidChecksumError,
-    MessageRetransmissionError,
     ReceivedNackError,
-    UnexpectedMessageError,
 )
 from .helpers import format_message
 from .message import Message
@@ -115,11 +113,12 @@ class TaskManager:
             task = self._running_tasks.get(task_id)
 
             if task is None:
-                _logger.warning("[CLIENT]unknown task_id=%d", task_id)
+                _logger.warning(
+                    "[CLIENT] Unexpected message unknown task_id=%d", task_id
+                )
                 if need_ack:
                     await self._send_nack(message)
-                    return
-                raise UnexpectedMessageError("%s", message)
+                return
 
             handlers: dict[
                 Command,
@@ -145,12 +144,9 @@ class TaskManager:
 
             await handler(task, message)
 
-        except UnexpectedMessageError:
-            raise UnexpectedMessageError()
-
         except Exception as e:
             _logger.error("[CLIENT]error handling message: %s", e)
-            raise
+            raise Exception
 
     async def _handle_ack(
         self,
@@ -286,7 +282,7 @@ class TaskManager:
                     )
                     await self._device.write(message)
 
-            raise MessageRetransmissionError(
+            _logger.error(
                 f"Failed to send the message after {NUM_MAX_RETRIES} retries:{message}"
             )
 
@@ -350,6 +346,7 @@ class TaskManager:
             except InvalidChecksumError as exc:
                 if exc.message.header.flags.need_ack:
                     await self._send_nack(exc.message)
+
             except Exception as exc:
                 _logger.warning(
                     "[Client] Receive loop Execption has been raised %s", exc
