@@ -28,9 +28,6 @@ static void usb_send_byte(Transport *self, uint8_t b)
  *   byte if available
  *   0 if no byte available
  *
- * NOTE:
- * This interface cannot distinguish
- * "no byte" from byte value 0.
  */
 static uint8_t usb_recv_byte(Transport *self)
 {
