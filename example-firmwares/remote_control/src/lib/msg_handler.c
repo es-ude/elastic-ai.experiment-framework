@@ -32,7 +32,12 @@ int msg_open_task(Frame *frame, TaskManager *task_manager)
         return -1;
     }
 
-    init_task(task, frame, task_manager);
+    bool task_created = init_task(task, frame, task_manager);
+    if (!task_created)
+    {
+        LOG("Failed to initialize task\n");
+        return -2;
+    }
     return task->id;
 }
 
@@ -70,7 +75,7 @@ int msg_data_chunk(RingBuffer *task_rb, Frame *frame, TaskManager *task_manager)
     return task->id;
 }
 
-void send_ack(Frame *frame, Sender *tx, enum AckType ack_type)
+void send_ack(Frame *frame, Sender *tx, enum AckType ack_type, uint8_t nack_code)
 {
     LOG("[Receiver] ACK requested for transaction ID: 0x%02X\n", frame->header.transaction_id);
 
@@ -87,7 +92,7 @@ void send_ack(Frame *frame, Sender *tx, enum AckType ack_type)
     }
     else
     {
-        frame_builder_nack(&ack_frame, frame->header.transaction_id, data_id);
+        frame_builder_nack(&ack_frame, frame->header.transaction_id, data_id, nack_code);
     }
     OutgoingOrder order = {
         .frame = ack_frame,
@@ -100,6 +105,7 @@ void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_
 {
     int associated_transaction_id = 0;
     enum AckType ack_type = SEND_ACK;
+    uint8_t nack_code = 0;
 
     bool need_ack = (frame->header.flags & FLAG_NEED_ACK) != 0;
 
@@ -119,7 +125,7 @@ void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_
             {
                 ack_type = SEND_NACK;
                 LOG("[Server] Received frame with invalid checksum. Sending NACK. Received: %02X, Expected: %02X\n", incoming_checksum, expected_checksum);
-                send_ack(frame, tx, ack_type);
+                send_ack(frame, tx, ack_type, NACK_CODE_WRONG_CHECKSUM);
                 return;
             }
             else
@@ -141,52 +147,69 @@ void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_
         tx->msg_counter[frame->header.transaction_id] = 0; // reset msg_id of outgoing messages. 0 is open task, 1 is following
         if (associated_transaction_id < 0)
         {
-            LOG("[Server] Failed to open task for transaction ID: 0x%02X\n", frame->header.transaction_id);
-            ack_type = SEND_NACK;
+            switch (associated_transaction_id)
+            {
+            case -1:
+                printf("[Server] Failed to open task for transaction ID: 0x%02X\n", frame->header.transaction_id);
+                ack_type = SEND_NACK;
+                nack_code = NACK_CODE_UNKNOWN_TRANSACTION_ID;
+                break;
+            case -2:
+                printf("[Server] Failed to initialize task for transaction ID: 0x%02X\n", frame->header.transaction_id);
+                ack_type = SEND_NACK;
+                nack_code = NACK_CODE_UNKNOWN_FUNCTION;
+                break;
+            default:
+                printf("[Server] Unknown error while opening task for transaction ID: 0x%02X\n", frame->header.transaction_id);
+                ack_type = SEND_NACK;
+            }
+
+            tx->msg_counter[frame->header.transaction_id] = 0; // reset msg_id of outgoing messages. 0 is open task, 1 is following
+            break;
+        case CLOSE_TASK:
+            associated_transaction_id = msg_close_task(frame, task_manager);
+            if (associated_transaction_id < 0)
+            {
+                printf("[Server] Failed to close task for transaction ID: 0x%02X\n", frame->header.transaction_id);
+                ack_type = SEND_NACK;
+                nack_code = NACK_CODE_UNKNOWN_TRANSACTION_ID;
+            }
+            break;
+        case RETURN:
+            msg_return(frame);
+            break;
+        case DATA_CHUNK:
+            LOG("[Server] Handling DATA_CHUNK message\n");
+            associated_transaction_id = msg_data_chunk(task_rb, frame, task_manager);
+
+            if (associated_transaction_id < 0)
+            {
+                printf("[Server] Failed to process data chunk for transaction ID: 0x%02X\n", frame->header.transaction_id);
+                ack_type = SEND_NACK;
+                nack_code = NACK_CODE_UNKNOWN_TRANSACTION_ID;
+            }
+
+            break;
+        case ACK:
+            on_ack(tx, frame->header.msg_id);
+            break;
+        case NACK:
+            on_nack(tx, frame->header.msg_id);
+            break;
+        case HANDSHAKE:
+
+            break;
+
+        default:
+            LOG("Unknown message type: %02X\n", frame->header.message_type);
+            ack_type = SEND_NACK; // Unknown message type
+            nack_code = NACK_CODE_UNKNOWN_MESSAGE_TYPE;
+            break;
         }
-
-        tx->msg_counter[frame->header.transaction_id] = 0; // reset msg_id of outgoing messages. 0 is open task, 1 is following
-        break;
-    case CLOSE_TASK:
-        associated_transaction_id = msg_close_task(frame, task_manager);
-        if (associated_transaction_id < 0)
-        {
-            LOG("[Server] Failed to close task for transaction ID: 0x%02X\n", frame->header.transaction_id);
-            ack_type = SEND_NACK;
-        }
-        break;
-    case RETURN:
-        msg_return(frame);
-        break;
-    case DATA_CHUNK:
-        LOG("[Server] Handling DATA_CHUNK message\n");
-        associated_transaction_id = msg_data_chunk(task_rb, frame, task_manager);
-
-        if (associated_transaction_id < 0)
-        {
-            LOG("[Server] Failed to process data chunk for transaction ID: 0x%02X\n", frame->header.transaction_id);
-            ack_type = SEND_NACK;
-        }
-
-        break;
-    case ACK:
-        on_ack(tx, frame->header.msg_id);
-        break;
-    case NACK:
-        on_nack(tx, frame->header.msg_id);
-        break;
-    case HANDSHAKE:
-
-        break;
-
-    default:
-        LOG("Unknown message type: %02X\n", frame->header.message_type);
-        ack_type = SEND_NACK; // Unknown message type
-        break;
     }
 
     if (need_ack)
     {
-        send_ack(frame, tx, ack_type);
+        send_ack(frame, tx, ack_type, nack_code);
     }
 }
