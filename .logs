@@ -1,0 +1,137 @@
+Module 'elasticai.experiment_framework.message_builder' not found. It will be ignored.
+Module 'elasticai.experiment_framework.io_stream' not found. It will be ignored.
+Module 'elasticai.experiment_framework.message_io' not found. It will be ignored.
+Module 'elasticai.experiment_framework.message' not found. It will be ignored.
+Module 'elasticai.experiment_framework.remote_control_protocol' not found. It will be ignored.
+Module 'elasticai.experiment_framework.message_chunks_receiver' not found. It will be ignored.
+Module 'elasticai.experiment_framework.commands' not found. It will be ignored.
+============================= test session starts ==============================
+platform linux -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /home/schoolher/elastic-ai.experiment-framework
+configfile: pyproject.toml
+plugins: tach-0.34.1, cov-7.1.0, anyio-4.13.0, asyncio-1.3.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collected 1 item
+[36m[Tach][0m 1 test in 2 files unaffected by changes ([33m~16.2s could be saved[0m). Skip with: [1mpytest --tach[0m
+[36m[Tach][0m [2mTo disable: pytest -p no:tach (https://docs.gauge.sh/usage/commands#using-the-pytest-plugin-directly)[0m
+
+tests/system/test_remote_control.py::TestTCPClient::test_unexpected_message_sends_nack 
+-------------------------------- live log setup --------------------------------
+INFO     test_remote_control.py:91 Starting server: /build/host-debug/src/app/remote_control 
+        127.0.0.1 
+        8080
+INFO     test_remote_control.py:120 SERVER PID=51423
+DEBUG    selector_events.py:64 Using selector: EpollSelector
+DEBUG    selector_events.py:64 Using selector: EpollSelector
+DEBUG    connection_provider.py:43 [CLIENT] connected via TCP
+-------------------------------- live log call ---------------------------------
+DEBUG    events.py:88 [CLIENT] sending message: command=DATA_CHUNK | flags=Flags(need_ack=True, has_crc=False) | task_id=1 | msg_id=0 | payload_len=5 | payload=68656c6c6f
+DEBUG    message_io.py:93 [CLIENT] write data  bytes b'\xaa\x04\x01\x01\x00\x05\x00hello'
+DEBUG    message_io.py:49 [CLIENT] read data 1 bytes b'\xaa'
+DEBUG    message_io.py:57 [CLIENT] read data 6 bytes b'\x06\x00\x01\x00\x01\x00'
+DEBUG    message_io.py:70 [CLIENT] read data 1 bytes b'\x03'
+DEBUG    events.py:88 [CLIENT] received message: command=NACK | flags=Flags(need_ack=False, has_crc=False) | task_id=1 | msg_id=0 | payload_len=1 | payload=03
+FAILED                                                                   [100%]
+------------------------------ live log teardown -------------------------------
+WARNING  connection_provider.py:104 connection lost: None
+
+
+=================================== FAILURES ===================================
+_______________ TestTCPClient.test_unexpected_message_sends_nack _______________
+
+self = <tests.system.test_remote_control.TestTCPClient object at 0x7f9090efdf40>
+manager = <elasticai.experiment_framework.remote_control.task_manager.TaskManager object at 0x7f9090efd9a0>
+
+    @pytest.mark.asyncio
+    async def test_unexpected_message_sends_nack(self, manager):
+        message = Message(
+            Command.DATA_CHUNK,
+            payload=b"hello",
+            flags=Flags(need_ack=True, has_crc=False).to_number(),
+            task_id=1,
+            msg_id=0,
+        )
+    
+        await manager._device.write(message)
+    
+        response = await manager._device.read()
+    
+        assert response.header.command == Command.NACK
+        assert response.header.task_id == message.header.task_id
+        assert response.header.msg_id == message.header.msg_id
+>       assert response.payload == bytes([NackErrorCode.UNEXPECTED_MESSAGE])
+E       AssertionError: assert b'\x03' == b'\x01'
+E         
+E         At index 0 diff: b'\x03' != b'\x01'
+E         
+E         Full diff:
+E         - b'\x01'
+E         ?      ^
+E         + b'\x03'
+E         ?      ^
+
+tests/system/test_remote_control.py:312: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+Starting server: /build/host-debug/src/app/remote_control 
+        127.0.0.1 
+        8080
+SERVER PID=51423
+Using selector: EpollSelector
+Using selector: EpollSelector
+[CLIENT] connected via TCP
+------------------------------ Captured log setup ------------------------------
+INFO     tests.system.test_remote_control:test_remote_control.py:91 Starting server: /build/host-debug/src/app/remote_control 
+        127.0.0.1 
+        8080
+INFO     tests.system.test_remote_control:test_remote_control.py:120 SERVER PID=51423
+DEBUG    asyncio:selector_events.py:64 Using selector: EpollSelector
+DEBUG    asyncio:selector_events.py:64 Using selector: EpollSelector
+DEBUG    elasticai.experiment_framework.remote_control.connection_provider:connection_provider.py:43 [CLIENT] connected via TCP
+----------------------------- Captured stdout call -----------------------------
+[Receiver] Current state: 0, Received byte: 0xAA
+[Receiver] Current state: 1, Received byte: 0x04
+[Receiver] Current state: 2, Received byte: 0x01
+[Receiver] Current state: 3, Received byte: 0x01
+[Receiver] Current state: 4, Received byte: 0x00
+[Receiver] Current state: 5, Received byte: 0x05
+[Receiver] Current state: 6, Received byte: 0x00
+LEN BYTES: 00 05 -> LEN=5
+[Receiver] Current state: 7, Received byte: 0x68
+[Receiver] Current state: 7, Received byte: 0x65
+[Receiver] Current state: 7, Received byte: 0x6C
+[Receiver] Current state: 7, Received byte: 0x6C
+[Receiver] Current state: 7, Received byte: 0x6F
+
+[Server] Received frame 
+ Control Byte: AA, Type: 04, Transaction ID: 01, Payload Len: 5
+
+[Server] Handling DATA_CHUNK message
+[Server] Handle incoming data chunk
+Invalid task ID in data chunk: 1
+[Server] Failed to process data chunk for transaction ID: 0x01
+[Receiver] ACK requested for transaction ID: 0x01
+----------------------------- Captured stderr call -----------------------------
+[CLIENT] sending message: command=DATA_CHUNK | flags=Flags(need_ack=True, has_crc=False) | task_id=1 | msg_id=0 | payload_len=5 | payload=68656c6c6f
+[CLIENT] write data  bytes b'\xaa\x04\x01\x01\x00\x05\x00hello'
+[CLIENT] read data 1 bytes b'\xaa'
+[CLIENT] read data 6 bytes b'\x06\x00\x01\x00\x01\x00'
+[CLIENT] read data 1 bytes b'\x03'
+[CLIENT] received message: command=NACK | flags=Flags(need_ack=False, has_crc=False) | task_id=1 | msg_id=0 | payload_len=1 | payload=03
+------------------------------ Captured log call -------------------------------
+DEBUG    elasticai.experiment_framework.remote_control.traffic.message.outgoing:events.py:88 [CLIENT] sending message: command=DATA_CHUNK | flags=Flags(need_ack=True, has_crc=False) | task_id=1 | msg_id=0 | payload_len=5 | payload=68656c6c6f
+DEBUG    elasticai.experiment_framework.remote_control.traffic.raw.outgoing:message_io.py:93 [CLIENT] write data  bytes b'\xaa\x04\x01\x01\x00\x05\x00hello'
+DEBUG    elasticai.experiment_framework.remote_control.traffic.raw.incoming:message_io.py:49 [CLIENT] read data 1 bytes b'\xaa'
+DEBUG    elasticai.experiment_framework.remote_control.traffic.raw.incoming:message_io.py:57 [CLIENT] read data 6 bytes b'\x06\x00\x01\x00\x01\x00'
+DEBUG    elasticai.experiment_framework.remote_control.traffic.raw.incoming:message_io.py:70 [CLIENT] read data 1 bytes b'\x03'
+DEBUG    elasticai.experiment_framework.remote_control.traffic.message.incoming:events.py:88 [CLIENT] received message: command=NACK | flags=Flags(need_ack=False, has_crc=False) | task_id=1 | msg_id=0 | payload_len=1 | payload=03
+--------------------------- Captured stderr teardown ---------------------------
+connection lost: None
+---------------------------- Captured log teardown -----------------------------
+WARNING  elasticai.experiment_framework.remote_control.connection_provider:connection_provider.py:104 connection lost: None
+========================= Tach Impact Analysis Warning =========================
+[Tach] WARNING: 1 test(s) failed that would be skipped by impact analysis!
+[Tach] These failures would be missed when using --tach:
+[Tach]   - tests/system/test_remote_control.py::TestTCPClient::test_unexpected_message_sends_nack
+=========================== short test summary info ============================
+FAILED tests/system/test_remote_control.py::TestTCPClient::test_unexpected_message_sends_nack
+============================== 1 failed in 4.50s ===============================

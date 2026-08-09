@@ -37,7 +37,6 @@ int main(int argc, char *argv[])
     init_task_manager(&outgoing_rb, &task_manager, task_definition_table, task_definition_table_size); // Initialize task manager with outgoing ring buffer for sending responses
 
     TransportConfig cfg = (TransportConfig){
-        .type = TRANSPORT_SOCKET,
         .cfg.socket.port = 8080,
         .incoming_rb = &incoming_rb};
 
