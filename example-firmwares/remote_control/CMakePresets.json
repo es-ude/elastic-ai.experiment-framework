@@ -1,0 +1,48 @@
+{
+  "version": 3,
+
+  "configurePresets": [
+    {
+      "name": "host-debug",
+      "displayName": "Host Debug Build",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/host-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ELASTIC_AI_TARGET": "HOST"
+      }
+    },
+    {
+      "name": "pico-debug",
+      "displayName": "Pico Debug Build",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/pico-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ELASTIC_AI_TARGET": "ENV5_2",
+        "PICO_PLATFORM": "rp2040"
+      }
+    }
+  ],
+
+  "buildPresets": [
+    {
+      "name": "host-debug",
+      "configurePreset": "host-debug"
+    },
+    {
+      "name": "pico-debug",
+      "configurePreset": "pico-debug"
+    }
+  ],
+
+  "testPresets": [
+    {
+      "name": "host-unit",
+      "configurePreset": "host-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}
