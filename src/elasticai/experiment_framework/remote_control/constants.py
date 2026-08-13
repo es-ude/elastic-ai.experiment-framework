@@ -1,5 +1,4 @@
 import struct
-from enum import Enum
 
 SYNC_BYTE = 0xAA
 HEADER_FORMAT = "<BBBBBH"
@@ -22,12 +21,6 @@ MAX_MSG_ID = 255
 
 SUCCESS_CODE = 0x0
 FAILURE_CODE = 0x1
-
-
-class TransportType(Enum):
-    TCP = 0x01
-    UDP = 0x02
-    SERIAL = 0x03
 
 
 MAX_CONNECTED_DEVICES = 4
