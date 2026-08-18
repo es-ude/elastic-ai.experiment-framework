@@ -35,7 +35,7 @@ def test_to_bytes():
         HEADER_FORMAT,
         SYNC_BYTE,
         Command.ACK,
-        Flags(need_ack=True, has_crc=False).to_byte(),
+        Flags(need_ack=True, has_crc=False).to_number(),
         100,
         1,
         63,
@@ -49,7 +49,7 @@ def test_from_bytes():
         HEADER_FORMAT,
         SYNC_BYTE,
         Command.OPEN_TASK,
-        Flags(need_ack=False, has_crc=True).to_byte(),
+        Flags(need_ack=False, has_crc=True).to_number(),
         0x10,
         0x12,
         0x11,
@@ -68,7 +68,7 @@ def test_raise_exception_when_wrong_sync_bytes():
         HEADER_FORMAT,
         0xAB,
         Command.OPEN_TASK,
-        Flags(need_ack=False, has_crc=True).to_byte(),
+        Flags(need_ack=False, has_crc=True).to_number(),
         0x00,
         0x10,
         0x11,
@@ -82,7 +82,7 @@ def test_raise_exception_when_invalid_size():
         HEADER_FORMAT[:6],
         0xAB,
         Command.OPEN_TASK,
-        Flags(need_ack=False, has_crc=True).to_byte(),
+        Flags(need_ack=False, has_crc=True).to_number(),
         0x93,
         0x10,
     )
@@ -136,11 +136,11 @@ def test_raise_exception_when_invalid_payload_len():
     ],
 )
 def test_to_bytes_from_bytes(command, flags, task_id, msg_id, payload_len):
-    h1 = Header(command, Flags.from_byte(flags), task_id, msg_id, payload_len)
+    h1 = Header(command, Flags.from_number(flags), task_id, msg_id, payload_len)
     data = h1.to_bytes()
     h2 = Header.from_bytes(data)
 
     assert h2.command == command
-    assert h2.flags == Flags.from_byte(flags)
+    assert h2.flags == Flags.from_number(flags)
     assert h2.task_id == task_id
     assert h2.payload_len == payload_len

@@ -45,7 +45,7 @@ class Header:
             HEADER_FORMAT,
             SYNC_BYTE,
             int(self.command),
-            self.flags.to_byte(),
+            self.flags.to_number(),
             self.task_id,
             self.msg_id,
             self.payload_len,
@@ -65,7 +65,7 @@ class Header:
         )
         return cls(
             command=Command.from_value(bytes([cmd])),
-            flags=Flags.from_byte(flags),
+            flags=Flags.from_number(flags),
             task_id=task_id,
             msg_id=msg_id,
             payload_len=payload_len,

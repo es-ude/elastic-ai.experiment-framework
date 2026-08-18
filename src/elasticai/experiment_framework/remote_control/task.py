@@ -1,5 +1,5 @@
 import asyncio
-from abc import ABC, abstractmethod
+from abc import ABC
 from enum import Enum, auto
 from typing import AsyncGenerator, Dict
 
@@ -24,6 +24,7 @@ class Task(ABC):
     def __init__(self, task_def_id: int) -> None:
         self.timeout: float = RESPONSE_TIMEOUT
         self.need_ack: bool = False
+        self.has_crx: bool = False
         self.task_def_id: int = task_def_id
 
         self._task_id: int = 0
@@ -60,10 +61,8 @@ class Task(ABC):
     async def on_opened(self) -> AsyncGenerator[CallbackAction, None]:
         yield NoAction()
 
-    @abstractmethod
     async def on_data_chunk_received(self) -> AsyncGenerator[CallbackAction, None]:
         yield NoAction()
 
-    @abstractmethod
     async def on_return(self) -> AsyncGenerator[CallbackAction, None]:
         yield NoAction()
