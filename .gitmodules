@@ -1,0 +1,3 @@
+[submodule "example-firmwares/remote_control/pico-sdk"]
+	path = example-firmwares/remote_control/pico-sdk
+	url = https://github.com/raspberrypi/pico-sdk.git

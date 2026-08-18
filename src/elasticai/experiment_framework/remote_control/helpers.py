@@ -17,6 +17,11 @@ def format_message(
         f"payload_len={header.payload_len}",
     ]
 
+    if msg.header.flags.has_crc:
+        parts += [
+            f"checksum={msg.checksum}",
+        ]
+
     match header.command:
         case Command.OPEN_TASK:
             if len(msg.payload) >= NUM_BYTES_FOR_ID:

@@ -35,7 +35,8 @@ typedef struct
         WAIT_MSG_ID,
         WAIT_LEN_L,
         WAIT_LEN_H,
-        WAIT_PAYLOAD
+        WAIT_PAYLOAD,
+        WAIT_CHECKSUM
     } state;
 
     RingBuffer *incoming_rb;

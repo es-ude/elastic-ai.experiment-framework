@@ -8,11 +8,13 @@ requires-python = ">=3.12"
 dependencies = [
     "black>=26.3.1",
     "click>=8.3.1",
+    "crc>=7.1.0",
     "fabric>=3.2.2",
     "invoke>=2.2.1",
     "isort>=8.0.1",
     "pyrefly>=0.57.1",
     "pyserial>=3.4",
+    "pyserial-asyncio>=0.6",
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
     "ruff>=0.15.12",
@@ -42,6 +44,7 @@ project-excludes = [
     "**/build",
     "**/*.pyc",
     "example-firmwares/build/**",
+    "example-firmwares/remote_control/pico-sdk/**",
 ]
 
 [tool.hatch.version]
@@ -64,7 +67,6 @@ extra-dev = ["pyrefly>=0.57.1", "ty>=0.0.24"]
 [tool.ty.environment]
 root = ["./src"]
 
-
 [tool.coverage.run]
 omit = [
     "tests/*py",
@@ -82,6 +84,9 @@ markers = [
 ]
 
 [tool.ruff]
+exclude = [
+    "example-firmwares/remote_control/pico-sdk/"
+]
 line-length = 88
 
 [tool.ruff.lint]
