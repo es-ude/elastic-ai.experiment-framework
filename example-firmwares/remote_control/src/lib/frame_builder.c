@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "log.h"
 
 /**
  *  Builds a RETURN frame with specified parameters
@@ -28,15 +29,13 @@ int frame_builder_data_chunk(Frame *frame, uint8_t flags, uint8_t *data, uint16_
 
     if (frame == NULL)
     {
-        printf("frame_builder_data_chunk: frame is NULL\n");
-        fflush(stdout);
+        LOG("frame_builder_data_chunk: frame is NULL\n");
         return -1;
     }
 
     if (data_len > 0 && data == NULL)
     {
-        printf("frame_builder_data_chunk: data is NULL but data_len > 0\n");
-        fflush(stdout);
+        LOG("frame_builder_data_chunk: data is NULL but data_len > 0\n");
         return -1;
     }
 
@@ -44,8 +43,7 @@ int frame_builder_data_chunk(Frame *frame, uint8_t flags, uint8_t *data, uint16_
     if (max_chunk_size != 0 && data_len > max_chunk_size) // if chunk size 0 assume we dont want chunking
     {
         // Handle chunking logic here (not implemented in this example)
-        printf("Data length exceeds maximum chunk size. Chunking not implemented yet.\n");
-        fflush(stdout);
+        LOG("Data length exceeds maximum chunk size. Chunking not implemented yet.\n");
         return -1;
     }
     int amount_chunks = 1; // Fixed for now
@@ -54,9 +52,8 @@ int frame_builder_data_chunk(Frame *frame, uint8_t flags, uint8_t *data, uint16_
 
     if (data_len > payload_capacity)
     {
-        printf("frame_builder_data_chunk: data_len (%u) exceeds payload capacity (%zu)\n",
-               data_len, payload_capacity);
-        fflush(stdout);
+        LOG("frame_builder_data_chunk: data_len (%u) exceeds payload capacity (%zu)\n",
+            data_len, payload_capacity);
         return -1;
     }
 
@@ -74,7 +71,7 @@ int frame_builder_data_chunk(Frame *frame, uint8_t flags, uint8_t *data, uint16_
         memcpy(frame->payload, data, data_len);
     }
 
-    printf("[Frame Builder] built datachunk frame\n");
+    LOG("[Frame Builder] built datachunk frame\n");
     return amount_chunks;
 }
 
