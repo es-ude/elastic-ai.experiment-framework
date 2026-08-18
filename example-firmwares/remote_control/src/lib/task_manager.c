@@ -2,7 +2,7 @@
 #include "frame_builder.h"
 #include "sender.h"
 #include "msg_types.h"
-#include "task_definitions.h"
+#include "log.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,8 +10,10 @@
 
 #define FIXED_PAYLOAD_SIZE 2
 
+static UserTasks user_task_defintions;
+
 // Initialize the task management system
-void init_task_manager(RingBuffer *outgoing_rb, TaskManager *task_manager)
+void init_task_manager(RingBuffer *outgoing_rb, TaskManager *task_manager, TaskDefinition *task_definition_table, uint32_t task_definition_table_size)
 {
 
     *task_manager = (TaskManager){
@@ -27,15 +29,21 @@ void init_task_manager(RingBuffer *outgoing_rb, TaskManager *task_manager)
         task->ctx.task_services.send_data = send_data;
         task->ctx.task_services.send_return = send_return;
         task->ctx.task_services.outgoing_rb = outgoing_rb;
-        }
+    }
+
+    user_task_defintions = (UserTasks){.task_definitions = task_definition_table,
+                                       .size = task_definition_table_size};
 }
 
 // Enqueue a task to be processed by the tasks process.
 void enqueue_task(RingBuffer *rb, Task *task)
 {
-    printf("[Task Manager] Enqueue task with values: \n task_id: %d, function_id: %d\n",
-           task->id, task->task_definition_id);
-    ringbuffer_push(rb, &task);
+    LOG("[Task Manager] Enqueue task with values: \n task_id: %d, function_id: %d\n",
+        task->id, task->task_definition_id);
+    if (!ringbuffer_push(rb, &task))
+    {
+        LOG("[Task Manager] Failed to enqueue task with id %d\n", task->id);
+    };
 }
 
 // Get one free task pointer. Does not reserve the Task already
@@ -112,11 +120,14 @@ bool finish_task(Task *task, TaskManager *task_manager)
     task->ctx.input_data_len = 0;
     task->ctx.output_data_len = 0;
 
+    task->ctx.step_counter = 0;
+
     task->funcs = NULL;
     task_manager->free_tasks++;
+    free(task->ctx.user_data);
+    task->ctx.user_data = NULL;
 
-    printf("[Task] Finished Task with id %i\n", task->id);
-    fflush(stdout);
+    LOG("[Task] Finished Task with id %i\n", task->id);
 
     return true;
 }
@@ -136,8 +147,24 @@ bool start_task(RingBuffer *rb, Task *task)
 {
     task->status = TASK_STATUS_RUNNING;
     enqueue_task(rb, task); // Enqueue the task to be processed by the tasks thread
-    printf("[Task] Started task with ID %i\n", task->id);
+    LOG("[Task] Started task with ID %i\n", task->id);
     return true;
+}
+
+TaskDefinition *get_task_definition(uint32_t task_definition_id)
+{
+    if (user_task_defintions.size == 0)
+    {
+        LOG("no task definitions are set");
+        return NULL;
+    }
+
+    if (task_definition_id >= user_task_defintions.size)
+    {
+        LOG("Invalid function ID: %d\n", task_definition_id);
+        return NULL;
+    }
+    return &user_task_defintions.task_definitions[task_definition_id];
 }
 
 void process_tasks(RingBuffer *task_rb, RingBuffer *outgoing_rb, TaskManager *task_manager)

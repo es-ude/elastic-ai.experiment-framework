@@ -1,136 +1,45 @@
-cmake_minimum_required(VERSION 3.10)
-project(embedded_remote_control C)
-
+cmake_minimum_required(VERSION 3.16)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 
 enable_testing()
 
 # =========================
-# PATHS
+# OPTIONS
 # =========================
 
-set(SRC_LIB        ${CMAKE_SOURCE_DIR}/src/lib)
-set(SRC_USER_CODE  ${CMAKE_SOURCE_DIR}/src/user_code)
-set(SRC_INTERFACES ${CMAKE_SOURCE_DIR}/src/interfaces)
-set(SRC_APP        ${CMAKE_SOURCE_DIR}/src/app)
-set(SRC_TRANSPORT  ${CMAKE_SOURCE_DIR}/src/transport)
-set(SRC_TESTS      ${CMAKE_SOURCE_DIR}/tests/unit)
-
+option(ENABLE_ASAN "Enable AddressSanitizer" OFF)
 
 # =========================
 # INIT
 # =========================
 
-if(PLATFORM STREQUAL "host")
-
-    message(STATUS "Building for HOST")
-
-else()
-
-    message(FATAL_ERROR "Unknown PLATFORM: ${PLATFORM}")
-
+if(NOT ELASTIC_AI_TARGET STREQUAL "HOST" AND NOT ELASTIC_AI_TARGET STREQUAL "ENV5_2")
+    message(FATAL_ERROR "Unknown PLATFORM: ${ELASTIC_AI_TARGET}")
 endif()
 
+message(STATUS "Building for ${ELASTIC_AI_TARGET}")
 
-# =========================
-# CORE LIB
-# =========================
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/load_third_party_deps.cmake)
 
-add_library(remote_core
-
-    ${SRC_USER_CODE}/task_definitions.c
-    ${SRC_LIB}/frame_builder.c
-    ${SRC_LIB}/msg_handler.c
-    ${SRC_LIB}/receiver.c
-    ${SRC_LIB}/ringbuffer.c
-    ${SRC_LIB}/sender.c
-    ${SRC_LIB}/task_manager.c
-    
-
-)
-
-target_include_directories(remote_core PUBLIC
-
-    ${SRC_LIB}
-    ${SRC_TRANSPORT}
-    ${SRC_INTERFACES}
-    ${SRC_USER_CODE}
-)
-
-
-# =========================
-# SANITIZER
-# =========================
-
-if(ENABLE_ASAN AND PLATFORM STREQUAL "host")
-
-    message(STATUS "AddressSanitizer enabled")
-
-    target_compile_options(remote_core PRIVATE
-
-        -fsanitize=address
-        -fno-omit-frame-pointer
-
-    )
-
-    target_link_options(remote_core INTERFACE
-
-        -fsanitize=address
-
-    )
-
+if(ELASTIC_AI_TARGET STREQUAL "HOST")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99")
 endif()
 
+add_runtime_enV5("v7.1.0")
+project(embedded_remote_control C CXX ASM)
+eai_runtime_init()
 
-# =========================
-# TRANSPORT IMPLEMENTATION
-# =========================
-
-if(PLATFORM STREQUAL "host")
-
-    target_sources(remote_core PRIVATE
-
-        ${SRC_TRANSPORT}/sockets.c
-
-    )
-
-
-endif()
-
-
-# =========================
-# APPLICATION
-# =========================
-
-if(PLATFORM STREQUAL "host")
-
-
-    add_executable(remote_control
-
-        ${SRC_APP}/main.c
-
-    )
-
-
-    target_link_libraries(remote_control PRIVATE
-
-        remote_core
-
-    )
-
-
-
-endif()
-
+add_subdirectory(src)
 
 # =========================
 # TESTS
 # =========================
 
-if(PLATFORM STREQUAL "host")
+if(ELASTIC_AI_TARGET STREQUAL "HOST")
 
     add_subdirectory(
-        ${SRC_TESTS}
+        ${CMAKE_SOURCE_DIR}/tests/unit
     )
 
 endif()

@@ -70,3 +70,8 @@ int ringbuffer_size(RingBuffer *rb)
         return rb->capacity - (rb->tail - rb->head);
     }
 }
+
+int ringbuffer_free_space(RingBuffer *rb)
+{
+    return rb->capacity - ringbuffer_size(rb) - 1;
+}

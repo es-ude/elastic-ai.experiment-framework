@@ -5,13 +5,13 @@
 
 #define FRAME_OVERHEAD 7
 #define CHECKSUM_SIZE 1
-#define MAX_PAYLOAD 256
+#define MAX_PAYLOAD 512
 
 // Flags. |= to set, & to check
 #define FLAG_NEED_ACK (1 << 0)
 #define FLAG_HAS_CRC (1 << 1)
 
-typedef struct
+typedef struct __attribute__((packed))
 {
     uint8_t start_byte; // Always 0xAA
     uint8_t message_type;

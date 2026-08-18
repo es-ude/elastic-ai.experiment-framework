@@ -1,12 +1,12 @@
-from abc import abstractmethod
-from collections.abc import Generator
-from contextlib import contextmanager
+import asyncio
+from contextlib import _AsyncGeneratorContextManager, _GeneratorContextManager, asynccontextmanager, contextmanager
 from dataclasses import dataclass
-from typing import Protocol, cast
+from typing import Protocol
+import subprocess
 
-from serial import Serial as _Serial
 from serial.tools import list_ports
 
+from .connection_provider import ConnectionProvider
 from .io_stream import IOStream
 
 
@@ -17,60 +17,100 @@ class _DeviceSpec:
     name: str
 
 
-_SPECS = {_DeviceSpec(10, 11914, "env5")}
-
-
 class Device(Protocol):
     @property
-    @abstractmethod
     def name(self) -> str: ...
 
-    @contextmanager
-    @abstractmethod
-    def connect(self) -> Generator[IOStream]: ...
+    def connect(self) -> _AsyncGeneratorContextManager[IOStream, None]: ...
 
+    def connect_sync(self) -> _GeneratorContextManager[IOStream, None]: ...
 
 class _SerialDevice(Device):
-    def __init__(self, spec: _DeviceSpec, comport: str) -> None:
+    def __init__(self, spec, port: str, baudrate: int = 115200):
         self._spec = spec
-        self._comport = comport
+        self._port = port
+        self._baudrate = baudrate
 
     @property
     def name(self) -> str:
         return self._spec.name
 
+    @asynccontextmanager
+    async def connect(self):
+        provider = ConnectionProvider()
+        async with provider.connectSerial(
+            port=self._port,
+            baudrate=self._baudrate,
+        ) as stream:
+            yield stream
+            
     @contextmanager
-    def connect(self) -> Generator[IOStream]:
-        with _Serial(self._comport) as opened:
-            yield _SerialIOStream(opened)
+    def connect_sync(self):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
-
-class _SerialIOStream(IOStream):
-    def __init__(self, _serial: _Serial):
-        self._serial = _serial
-
-    async def write(self, data: bytes | bytearray, /) -> int:
-        return cast(int, self._serial.write(data))
-
-    async def read(self, num_bytes: int, /) -> bytes:
-        return self._serial.read(num_bytes)
-
-
-def probe_for_devices() -> list[Device]:
-    discovered: list[Device] = []
-    for spec in _SPECS:
+        ctx = self.connect()
+        stream = loop.run_until_complete(ctx.__aenter__())
         try:
-            comport = detect_device(spec.pid, spec.vid)
-            discovered.append(_SerialDevice(spec, comport=comport))
-        except RuntimeError:
+            yield stream
+        finally:
+            loop.run_until_complete(ctx.__aexit__(None, None, None))
+            loop.close()
+
+
+previous_lines = 0
+
+def print_usb_devices(message: str):
+    global previous_lines
+
+    if previous_lines:
+        print(f"\033[{previous_lines}A", end="")
+
+    lines = message.rstrip("\n").splitlines()
+
+    for line in lines:
+        print("\033[2K" + line)
+    
+    previous_lines = len(lines)
+    print(flush=True)
+
+def probe_for_devices(specs: set[_DeviceSpec]) -> list[Device]:
+    discovered: list[Device] = []
+
+    for spec in specs:
+        try:
+            port = detect_device(spec.pid, spec.vid)
+
+            discovered.append(
+                _SerialDevice(
+                    spec=spec,
+                    port=port,
+                )
+            )
+
+        except RuntimeError as e:
+            lsusb = subprocess.run(
+                ["lsusb"],
+                capture_output=True,
+                text=True,
+            )
+
+            message = (
+                f"not found: VID={spec.vid:#06x}, PID={spec.pid:#06x}: {e}\n"
+                f"Currently connected USB devices:\n"
+                f"{lsusb.stdout}"
+            )
+
+            print_usb_devices(message)
             continue
+
     return discovered
 
 
 def detect_device(pid: int, vid: int) -> str:
     all_ports = list_ports.comports()
     for port in all_ports:
-        if (port.pid, port.vid) == (pid, vid):
+        if getattr(port, "pid", None) == pid and getattr(port, "vid", None) == vid:
             return port.device
     else:
         raise RuntimeError(

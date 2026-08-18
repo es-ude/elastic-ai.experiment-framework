@@ -34,7 +34,7 @@ int main(int argc, char *argv[])
     ringbuffer_init(&outgoing_rb, outgoing_storage, OUTGOING_BUFFER_SIZE, sizeof(OutgoingOrder));
     ringbuffer_init(&task_rb, task_storage, TASK_BUFFER_SIZE, sizeof(Task *));
 
-    init_task_manager(&outgoing_rb, &task_manager); // Initialize task manager with outgoing ring buffer for sending responses
+    init_task_manager(&outgoing_rb, &task_manager, task_definition_table, task_definition_table_size); // Initialize task manager with outgoing ring buffer for sending responses
 
     TransportConfig cfg = (TransportConfig){
         .type = TRANSPORT_SOCKET,
@@ -52,8 +52,6 @@ int main(int argc, char *argv[])
         .outgoing_rb = &outgoing_rb,
         .msg_counter = {0}};
 
-    printf("[Server] Server was started\n");
-    fflush(stdout);
     while (1)
     {
         process_rx(&receiver, &task_manager, &sender);
