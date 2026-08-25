@@ -447,7 +447,7 @@ class TestNackCodes:
 
     @pytest.mark.asyncio
     async def test_retransmits_then_succeeds(self, task_manager, task1):
-        task1.has_crx = True
+        task1.has_crc = True
 
         open_task = asyncio.create_task(task_manager.open_task(task1, need_ack=True))
 

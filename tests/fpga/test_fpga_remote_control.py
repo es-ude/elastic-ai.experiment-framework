@@ -25,10 +25,71 @@ def fpga_remote_control(flashed_pico, wait_for_device):
 def test_fpga_flashing(fpga_remote_control):
     fpga_remote_control.fpga_power_off()
     fpga_remote_control.upload_bitstream(
+        flash_sector=0, path_to_bitstream=BYTE_STREAM_PATH, timer=False, need_ack=True
+    )
+    fpga_remote_control.read_skeleton_id()
+    fpga_remote_control.fpga_power_on()
+    res = fpga_remote_control.predict(b"\xff", 1)
+
+    logger.info(f"Predict result: {res}")
+
+    assert res == b"\x01"
+
+
+def test_fpga_flashing_timer(fpga_remote_control):
+    fpga_remote_control.fpga_power_off()
+    fpga_remote_control.upload_bitstream(
+        flash_sector=0, path_to_bitstream=BYTE_STREAM_PATH, timer=True
+    )
+    fpga_remote_control.read_skeleton_id()
+    fpga_remote_control.fpga_power_on()
+    res = fpga_remote_control.predict(b"\xff", 1)
+
+    logger.info(f"Predict result: {res}")
+
+    assert res == b"\x01"
+
+
+def test_fpga_flashing_timer_ack(fpga_remote_control):
+    fpga_remote_control.fpga_power_off()
+    fpga_remote_control.upload_bitstream(
+        flash_sector=0, path_to_bitstream=BYTE_STREAM_PATH, timer=True, need_ack=True
+    )
+    fpga_remote_control.read_skeleton_id()
+    fpga_remote_control.fpga_power_on()
+    res = fpga_remote_control.predict(b"\xff", 1)
+
+    logger.info(f"Predict result: {res}")
+
+    assert res == b"\x01"
+
+
+def test_fpga_flashing_timer_checksum(fpga_remote_control):
+    fpga_remote_control.fpga_power_off()
+    fpga_remote_control.upload_bitstream(
         flash_sector=0,
         path_to_bitstream=BYTE_STREAM_PATH,
+        timer=True,
+        need_checksum=True,
     )
+    fpga_remote_control.read_skeleton_id()
     fpga_remote_control.fpga_power_on()
+    res = fpga_remote_control.predict(b"\xff", 1)
+
+    logger.info(f"Predict result: {res}")
+
+    assert res == b"\x01"
+
+
+def test_fpga_flashing_timer_ack_checksum(fpga_remote_control):
+    fpga_remote_control.fpga_power_off()
+    fpga_remote_control.upload_bitstream(
+        flash_sector=0,
+        path_to_bitstream=BYTE_STREAM_PATH,
+        timer=True,
+        need_checksum=True,
+        need_ack=True,
+    )
     fpga_remote_control.read_skeleton_id()
     res = fpga_remote_control.predict(b"\xff", 1)
 
