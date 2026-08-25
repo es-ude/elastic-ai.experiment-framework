@@ -60,7 +60,7 @@ def build_pico_firmware():
     print("2 configure done", flush=True)
 
     build = subprocess.run(
-        ["cmake", "--build", "--preset", "pico-debug", "--clean-fiist"],
+        ["cmake", "--build", "--preset", "pico-debug", "--clean-first"],
         cwd=SERVER_CMAKE,
         capture_output=True,
         text=True,
@@ -262,7 +262,7 @@ class TestSerialClient:
     async def test_flash(self, manager, monkeypatch):
         data = b'\xcc\xf5\x07\x00'
 
-        task = DummyTask(task_def_id=9, msg=data)
+        task = DummyTask(task_def_id=6, msg=data)
         task.timeout = 0.1
 
         await manager.open_task(task)
@@ -273,11 +273,52 @@ class TestSerialClient:
 
         assert task.received_data[0] == data
 
+
+    @pytest.mark.asyncio
+    async def test_init(self, manager, monkeypatch):
+        data = b'0'
+
+        task = DummyTask(task_def_id=3, msg=data)
+        task.timeout = 0.1
+
+        await manager.open_task(task)
+        await manager.send_chunk(task,data)
+
+        await asyncio.sleep(2)
+
+        assert task.received_data[0] != data
+
+    @pytest.mark.asyncio
+    async def test_fpga_off(self, manager, monkeypatch):
+        data = b'0'
+
+        task = DummyTask(task_def_id=5, msg=data)
+        task.timeout = 0.1
+
+        await manager.open_task(task)
+
+        await asyncio.sleep(2)
+
+        assert task.state == TaskState.RETURNED
+
+    @pytest.mark.asyncio
+    async def test_fpga_on(self, manager, monkeypatch):
+        data = b'0'
+
+        task = DummyTask(task_def_id=4, msg=data)
+        task.timeout = 0.1
+
+        await manager.open_task(task)
+
+        await asyncio.sleep(2)
+
+        assert task.state == TaskState.RETURNED
+
     @pytest.mark.asyncio
     async def test_clear_flash(self, manager, monkeypatch):
         data = b'0'
 
-        task = DummyTask(task_def_id=10, msg=data)
+        task = DummyTask(task_def_id=9, msg=data)
         task.timeout = 0.1
 
         await manager.open_task(task)
@@ -291,7 +332,7 @@ class TestSerialClient:
     async def test_get_flash_ones(self, manager, monkeypatch):
         data = b'0'
 
-        task = DummyTask(task_def_id=11, msg=data)
+        task = DummyTask(task_def_id=10, msg=data)
         task.timeout = 0.1
 
         await manager.open_task(task)
@@ -316,7 +357,7 @@ class TestSerialClient:
 
     @pytest.mark.asyncio
     async def test_predict(self, manager, monkeypatch):
-        data = b"b"
+        data = b"\x01b"
 
         task = DummyTask(task_def_id=8, msg=data)
         task.timeout = 0.1
@@ -328,3 +369,258 @@ class TestSerialClient:
 
         assert task.received_data[0] == b"\x01"
 
+
+    #---------------------Timer-------------------------------
+
+    @pytest.mark.asyncio
+    async def test_timer(self, manager, monkeypatch):
+        data = b"0"
+
+        task = DummyTask(task_def_id=11, msg=data)
+        task.timeout = 0.1
+
+        await manager.open_task(task)
+        await manager.send_chunk(task,data)
+
+        await asyncio.sleep(1)
+
+        assert task.received_data[0] != data
+
+    @pytest.mark.asyncio
+    async def test_timer_mirror(self, manager, monkeypatch):
+        data = b"Hallo Welt"
+
+        task = DummyTask(task_def_id=12, msg=data)
+        task.timeout = 0.1
+
+        await manager.open_task(task)
+        await manager.send_chunk(task,data)
+
+        await asyncio.sleep(1)
+
+        assert task.received_data[0] == data
+
+    @pytest.mark.asyncio
+    async def test_timer_fpga_on(self, manager, monkeypatch):
+        data = b"0"
+
+        task = DummyTask(task_def_id=13, msg=data)
+        task.timeout = 0.1
+
+        await manager.open_task(task)
+        await manager.send_chunk(task,data)
+
+        await asyncio.sleep(1)
+
+        assert task.received_data[0] != data
+
+    @pytest.mark.asyncio
+    async def test_timer_predict(self, manager, monkeypatch):
+        data = b"\x01\x0b"
+
+        task = DummyTask(task_def_id=15, msg=data)
+        task.timeout = 0.1
+
+        await manager.open_task(task)
+        await manager.send_chunk(task,data)
+
+        await asyncio.sleep(1)
+
+        assert task.received_data[0] == b"\x01"
+
+
+    #----------------------Timer with checksum--------------------------
+
+    @pytest.mark.asyncio
+    async def test_timer_checksum(self, manager, monkeypatch):
+        data = b"0"
+
+        task = DummyTask(task_def_id=11, msg=data)
+        task.timeout = 0.1
+        task.has_crx = True
+
+        await manager.open_task(task)
+        await manager.send_chunk(task,data)
+
+        await asyncio.sleep(1)
+
+        assert task.received_data[0] != data
+
+    @pytest.mark.asyncio
+    async def test_timer_mirror_checksum(self, manager, monkeypatch):
+        data = b"Hallo Welt"
+
+        task = DummyTask(task_def_id=12, msg=data)
+        task.timeout = 0.1
+        task.has_crx = True
+
+        await manager.open_task(task)
+        await manager.send_chunk(task,data)
+
+        await asyncio.sleep(1)
+
+        assert task.received_data[0] == data
+
+    @pytest.mark.asyncio
+    async def test_timer_fpga_on_checksum(self, manager, monkeypatch):
+        data = b"0"
+
+        task = DummyTask(task_def_id=13, msg=data)
+        task.timeout = 0.1
+        task.has_crx = True
+
+        await manager.open_task(task)
+        await manager.send_chunk(task,data)
+
+        await asyncio.sleep(1)
+
+        assert task.received_data[0] != data
+
+    @pytest.mark.asyncio
+    async def test_timer_predict_checksum(self, manager, monkeypatch):
+        data = b"\x01\x0b"
+
+        task = DummyTask(task_def_id=15, msg=data)
+        task.timeout = 0.1
+        task.has_crx = True
+
+        await manager.open_task(task)
+        await manager.send_chunk(task,data)
+
+        await asyncio.sleep(1)
+
+        assert task.received_data[0] == b"\x01"
+
+
+    #----------------------Timer with ack/nack--------------------------
+
+    @pytest.mark.asyncio
+    async def test_timer_ack(self, manager, monkeypatch):
+        data = b"0"
+
+        task = DummyTask(task_def_id=11, msg=data)
+        task.timeout = 0.1
+        task.need_ack = True
+
+        await manager.open_task(task)
+        await manager.send_chunk(task,data)
+
+        await asyncio.sleep(1)
+
+        assert task.received_data[0] != data
+
+    @pytest.mark.asyncio
+    async def test_timer_mirror_ack(self, manager, monkeypatch):
+        data = b"Hallo Welt"
+
+        task = DummyTask(task_def_id=12, msg=data)
+        task.timeout = 0.1
+        task.need_ack = True
+
+        await manager.open_task(task)
+        await manager.send_chunk(task,data)
+
+        await asyncio.sleep(1)
+
+        assert task.received_data[0] == data
+
+    @pytest.mark.asyncio
+    async def test_timer_fpga_on_ack(self, manager, monkeypatch):
+        data = b"0"
+
+        task = DummyTask(task_def_id=13, msg=data)
+        task.timeout = 0.1
+        task.need_ack = True
+
+        await manager.open_task(task)
+        await manager.send_chunk(task,data)
+
+        await asyncio.sleep(1)
+
+        assert task.received_data[0] != data
+
+
+    @pytest.mark.asyncio
+    async def test_timer_predict_ack(self, manager, monkeypatch):
+        data = b"\x01\x0b"
+
+        task = DummyTask(task_def_id=15, msg=data)
+        task.timeout = 0.1
+        task.need_ack = True
+
+        await manager.open_task(task)
+        await manager.send_chunk(task,data)
+
+        await asyncio.sleep(1)
+
+        assert task.received_data[0] == b"\x01"
+
+
+    #----------------------Timer with ack + checksum--------------------------
+
+    @pytest.mark.asyncio
+    async def test_timer_ack_checksum(self, manager, monkeypatch):
+        data = b"0"
+
+        task = DummyTask(task_def_id=11, msg=data)
+        task.timeout = 0.1
+        task.need_ack = True
+        task.has_crx = True
+
+        await manager.open_task(task)
+        await manager.send_chunk(task, data)
+
+        await asyncio.sleep(1)
+
+        assert task.received_data[0] != data
+
+
+    @pytest.mark.asyncio
+    async def test_timer_mirror_ack_checksum(self, manager, monkeypatch):
+        data = b"Hallo Welt"
+
+        task = DummyTask(task_def_id=12, msg=data)
+        task.timeout = 0.1
+        task.need_ack = True
+        task.has_crx = True
+
+        await manager.open_task(task)
+        await manager.send_chunk(task, data)
+
+        await asyncio.sleep(1)
+
+        assert task.received_data[0] == data
+
+
+    @pytest.mark.asyncio
+    async def test_timer_fpga_on_ack_checksum(self, manager, monkeypatch):
+        data = b"0"
+
+        task = DummyTask(task_def_id=13, msg=data)
+        task.timeout = 0.1
+        task.need_ack = True
+        task.has_crx = True
+
+        await manager.open_task(task)
+        await manager.send_chunk(task, data)
+
+        await asyncio.sleep(1)
+
+        assert task.received_data[0] != data
+
+
+    @pytest.mark.asyncio
+    async def test_timer_predict_ack_checksum(self, manager, monkeypatch):
+        data = b"\x01\x0b"
+
+        task = DummyTask(task_def_id=15, msg=data)
+        task.timeout = 0.1
+        task.need_ack = True
+        task.has_crx = True
+
+        await manager.open_task(task)
+        await manager.send_chunk(task, data)
+
+        await asyncio.sleep(1)
+
+        assert task.received_data[0] == b"\x01"

@@ -126,7 +126,8 @@ void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_
             {
                 ack_type = SEND_NACK;
                 LOG("[Server] Received frame with invalid checksum. Sending NACK. Received: %02X, Expected: %02X\n", incoming_checksum, expected_checksum);
-                send_ack(frame, tx, ack_type, NACK_CODE_WRONG_CHECKSUM);
+                send_ack(frame, tx, ack_type, expected_checksum);
+                send_ack(frame, tx, ack_type, incoming_checksum); // Send the received checksum as the NACK code for debugging
                 return;
             }
             else

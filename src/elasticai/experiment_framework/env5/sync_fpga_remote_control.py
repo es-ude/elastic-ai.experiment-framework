@@ -27,9 +27,9 @@ class SyncFPGARemoteControl:
             self._async_control.predict(data, result_size)
         )
 
-    def upload_bitstream(self, flash_sector: int, path_to_bitstream: str):
+    def upload_bitstream(self, flash_sector: int, path_to_bitstream: str, timer: bool = False, need_ack: bool = False, need_checksum: bool = False):
         self._loop.run_until_complete(
-            self._async_control.upload_bitstream(flash_sector, path_to_bitstream)
+            self._async_control.upload_bitstream(flash_sector, path_to_bitstream, timer, need_ack, need_checksum)
         )
 
     def _close(self) -> None:
