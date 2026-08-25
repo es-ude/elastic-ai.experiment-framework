@@ -10,3 +10,5 @@ class TaskDefinitionIds(IntEnum):
     FPGA_WRITE_TO_FLASH = 0x6
     FPGA_READ_SKELETON_ID = 0x7
     FPGA_PREDICT = 0x8
+    FPGA_WRITE_TO_FLASH_TIMER = 14
+    

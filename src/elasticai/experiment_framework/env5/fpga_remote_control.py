@@ -62,15 +62,22 @@ class FPGARemoteControl(RemoteControl):
         self,
         flash_sector: int,
         path_to_bitstream: str,
+        timer: bool,
+        need_ack: bool,
+        need_checksum: bool,
     ):
         with open(path_to_bitstream, "rb") as f:
             bitstream = f.read()
 
         task = FPGAWriteToFlashTask(
-            task_def_id=TaskDefinitionIds.FPGA_WRITE_TO_FLASH,
+            task_def_id= (TaskDefinitionIds.FPGA_WRITE_TO_FLASH_TIMER if timer else TaskDefinitionIds.FPGA_WRITE_TO_FLASH),
             sector=flash_sector,
             data=bitstream,
             chunk_size=self._chunk_size,
+            need_ack = need_ack,
+            need_checksum = need_checksum
         )
 
         await self._run_task(task)
+
+        

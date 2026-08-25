@@ -27,7 +27,7 @@ TaskDefinition task_definition_table[] = {
     {.setup = fast_setup_fpga_power_on,
      .handle = fpga_power_on,
      .tear_down = default_teardown},
-    {.setup = fast_setup_fpga_power_off,
+    {.setup = fast_setup_fpga_power_off, // 5
      .handle = fpga_power_off,
      .tear_down = default_teardown},
     {.setup = default_setup,
@@ -40,14 +40,27 @@ TaskDefinition task_definition_table[] = {
      .handle = predict,
      .tear_down = default_teardown},
     {.setup = default_setup,
-     .handle = write_to_flash,
-     .tear_down = default_teardown},
-    {.setup = default_setup,
      .handle = erase_fpga_flash,
      .tear_down = default_teardown},
-    {.setup = default_setup,
+    {.setup = default_setup, // 10
      .handle = get_flash_ones,
-     .tear_down = default_teardown}
+     .tear_down = default_teardown},
+    {.setup = setup_start_timer,
+     .handle = timer_check,
+     .tear_down = default_teardown},
+    {.setup = setup_start_timer,
+     .handle = timer_string_echo,
+     .tear_down = default_teardown},
+    {.setup = setup_start_timer,
+     .handle = timer_fpga_power_on,
+     .tear_down = default_teardown},
+    {.setup = setup_start_timer,
+     .handle = timer_write_to_flash_from_remote,
+     .tear_down = default_teardown},
+    {.setup = setup_start_timer,
+     .handle = timer_predict,
+     .tear_down = default_teardown},
+
 #endif
 };
 

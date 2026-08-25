@@ -1,6 +1,5 @@
 #include "task_definitions_pico.h"
 
-#include "embedded_fpga_bitstream.h"
 #include "hardware_functions/Middleware.h"
 #include "config/config.h"
 #include "eai/flash/Flash.h"
@@ -107,6 +106,20 @@ uint32_t count_flash_ones(TaskContext *task_context, uint32_t length)
 
 // ---------------------------------------------------------------
 
+typedef struct
+{
+    uint64_t timer;
+    void *further_user_data;
+} TimerUserDataStruct;
+
+typedef struct
+{
+    uint8_t target_sector;
+    uint32_t written_bytes;
+} UserDataStruct;
+
+// ---------------------------------------------------------------
+
 void fast_setup_hardware_init(TaskContext *task_context)
 {
     hardware_init(task_context);
@@ -127,10 +140,126 @@ void fast_setup_read_skeleton_id(TaskContext *task_context)
     read_skeletion_id(task_context);
 }
 
+void setup_start_timer(TaskContext *task_context)
+{
+    task_context->user_data = malloc(sizeof(TimerUserDataStruct));
+    TimerUserDataStruct *timer = (TimerUserDataStruct *)task_context->user_data;
+
+    uint64_t start_time = time_us_64();
+    timer->timer = start_time;
+}
+
+// Function sends the timer since function start and sends a return. Should be called last. Needs user_data to be of type TimeUserDataStruct
+void send_timer_return(TaskContext *task_context)
+{
+    uint64_t current_time = time_us_64();
+    TimerUserDataStruct *timer = (TimerUserDataStruct *)task_context->user_data;
+
+    uint64_t time_since_start = current_time - timer->timer;
+
+    task_context->task_services.send_data(&task_context->task_services, 0, (uint8_t *)&time_since_start, 4, false);
+    task_context->task_services.send_return(&task_context->task_services, 0, 0, false);
+}
+
 // ---------------------------------------------------------------
+
+void timer_check(TaskContext *task_context)
+{
+    send_timer_return(task_context);
+}
+
+void timer_string_echo(TaskContext *task_context)
+{
+    task_context->task_services.send_data(&task_context->task_services, 0, task_context->input_data, task_context->input_data_len, false);
+    send_timer_return(task_context);
+}
+
+void timer_fpga_power_on(TaskContext *task_context)
+{
+    Fpga *fpga = Config_getFpga();
+    Fpga_powerOn(fpga);
+    send_timer_return(task_context);
+}
+
+void timer_write_to_flash_from_remote(TaskContext *task_context)
+{
+    if (task_context->step_counter > 0 && task_context->input_data_len < flashConfig.bytesPerPage)
+    {
+        // sending completed
+        UserDataStruct *user_data = (UserDataStruct *)((TimerUserDataStruct *)task_context->user_data)->further_user_data;
+        task_context->task_services.send_data(&task_context->task_services, 0, (uint8_t *)&user_data->written_bytes, 4, false);
+        send_timer_return(task_context);
+        return;
+    }
+
+    if (task_context->step_counter == 0)
+    {
+        ((TimerUserDataStruct *)task_context->user_data)->further_user_data = malloc(sizeof(UserDataStruct));
+        UserDataStruct *user_data = (UserDataStruct *)((TimerUserDataStruct *)task_context->user_data)->further_user_data;
+        user_data->written_bytes = 0;
+
+        user_data->target_sector = task_context->input_data[0];
+
+        eraseFlash(&flashConfig, 0, task_context->input_data_len);
+    }
+    else
+    {
+        UserDataStruct *user_data = (UserDataStruct *)((TimerUserDataStruct *)task_context->user_data)->further_user_data;
+        uint16_t writtenBytes = flashWritePage(&flashConfig, (task_context->step_counter - 1) * flashConfig.bytesPerPage + (user_data->target_sector * flashConfig.bytesPerSector), task_context->input_data, flashConfig.bytesPerPage);
+        if (writtenBytes <= 0)
+        {
+            char *error_msg = "Flash write failed";
+            task_context->task_services.send_data(&task_context->task_services, 0, (uint8_t *)&error_msg, strlen(error_msg), false);
+        }
+        user_data->written_bytes += writtenBytes;
+    }
+
+    task_context->input_data_len = 0; // set back to zero so new data overwrites old data
+    task_context->step_counter++;
+}
+
+void timer_predict(TaskContext *task_context)
+{
+    Fpga *fpga = Config_getFpga();
+    if (!Fpga_isPoweredOn(fpga))
+    {
+        Fpga_powerOn(fpga);
+        sleep_ms(100); // wait for FPGA to power up
+    }
+    FpgaMiddleware *fpga_middleware = Config_getFpgaMiddleware();
+    FpgaMiddleware_init(fpga_middleware);
+    FpgaMiddleware_enableUserLogic(fpga_middleware);
+
+    uint8_t result_size = task_context->input_data[0];
+    uint8_t model_inference_input = task_context->input_data[1];
+
+    FpgaMiddleware_write(fpga_middleware, &model_inference_input, USER_LOGIC_START_ADDRESS, 1);
+
+    startCompute();
+    while (FpgaMiddleware_fpgaIsBusy(fpga_middleware))
+    {
+    }
+    stopCompute();
+
+    FpgaMiddleware_read(fpga_middleware, task_context->output_data, USER_LOGIC_START_ADDRESS, result_size);
+    task_context->output_data_len = task_context->input_data_len;
+
+    FpgaMiddleware_disableUserLogic(fpga_middleware);
+    FpgaMiddleware_deinit(fpga_middleware);
+
+    task_context->task_services.send_data(&task_context->task_services, 0, task_context->output_data, result_size, false);
+    send_timer_return(task_context);
+}
+
+// ----------------------------------------------------------------------
+
 void hardware_init(TaskContext *task_context)
 {
-    init_hardware();
+    if (flashConfig.spiConfiguration->spiInstance == NULL)
+    {
+        init_hardware();
+    }
+
     uint16_t value = flashConfig.bytesPerPage;
 
     uint8_t data[2] = {
@@ -157,25 +286,14 @@ void fpga_power_off(TaskContext *task_context)
 
 void erase_fpga_flash(TaskContext *task_context)
 {
-    init_hardware();
+    if (flashConfig.spiConfiguration->spiInstance == NULL)
+    {
+        init_hardware();
+    }
     uint32_t amount_to_delete = 550000;
     eraseFlash(&flashConfig, 0, amount_to_delete);
     task_context->task_services.send_return(&task_context->task_services, 0, 0, false);
 }
-
-void write_to_flash(TaskContext *task_context)
-{
-    init_hardware();
-    uint32_t writtenBytes = flashWriteBitstream(&flashConfig, (uint8_t *)&fpga_bitstream, fpga_bitstream_size);
-    task_context->task_services.send_data(&task_context->task_services, 0, (uint8_t *)&writtenBytes, 4, false);
-    task_context->task_services.send_return(&task_context->task_services, 0, 0, false);
-}
-
-typedef struct
-{
-    uint8_t target_sector;
-    uint32_t written_bytes;
-} UserDataStruct;
 
 void write_to_flash_from_remote(TaskContext *task_context)
 {
@@ -218,9 +336,6 @@ void write_to_flash_from_remote(TaskContext *task_context)
 
     task_context->input_data_len = 0; // set back to zero so new data overwrites old data
     task_context->step_counter++;
-
-    // task_context->task_services.send_return(&task_context->task_services, 0, writtenBytes, false);
-    return;
 }
 
 #define ADDR_MODEL_ID 0
@@ -229,7 +344,10 @@ void write_to_flash_from_remote(TaskContext *task_context)
 void read_skeletion_id(TaskContext *task_context)
 {
     uint8_t skeleton_id[16] = {0};
-    init_hardware();
+    if (flashConfig.spiConfiguration->spiInstance == NULL)
+    {
+        init_hardware();
+    }
     Fpga *fpga = Config_getFpga();
     if (!Fpga_isPoweredOn(fpga))
     {
@@ -256,7 +374,10 @@ void predict(TaskContext *task_context)
     if (!Fpga_isPoweredOn(fpga))
     {
         Fpga_powerOn(fpga);
-        sleep_ms(100); // wait for FPGA to power up
+        while (!Fpga_isPoweredOn(fpga))
+        {
+            sleep_ms(1); // wait for FPGA to power up
+        }
         char *msg = "power_fpga";
         task_context->task_services.send_data(&task_context->task_services, 0, msg, 10, false);
     }
@@ -287,7 +408,10 @@ void predict(TaskContext *task_context)
 
 void get_flash_ones(TaskContext *task_context)
 {
-    init_hardware();
+    if (flashConfig.spiConfiguration->spiInstance == NULL)
+    {
+        init_hardware();
+    }
     uint32_t ones = count_flash_ones(task_context, 1024);
 
     task_context->task_services.send_data(&task_context->task_services, 0, (uint8_t *)&ones, 4, false);

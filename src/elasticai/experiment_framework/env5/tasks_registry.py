@@ -31,11 +31,14 @@ class FPGAInitTask(Task):
 
 
 class FPGAWriteToFlashTask(Task):
-    def __init__(self, task_def_id: int, sector: int, data: bytes, chunk_size: int):
+    def __init__(self, task_def_id: int, sector: int, data: bytes, chunk_size: int, need_ack: bool, need_checksum: bool):
         super().__init__(task_def_id)
         self._data = data
         self.chunk_size = chunk_size
         self.sector = sector
+        self.need_ack = need_ack
+        self.need_checksum = need_checksum
+        self.has_crx = need_checksum
 
     async def on_opened(self):
         yield SendChunk(int.to_bytes(self.sector, length=1, byteorder="little"))
@@ -45,4 +48,4 @@ class FPGAWriteToFlashTask(Task):
             pos = i * self.chunk_size
             chunk = self._data[pos : pos + self.chunk_size]
 
-            yield SendChunk(chunk, need_ack=True)
+            yield SendChunk(chunk,need_ack=self.need_ack)
