@@ -11,8 +11,14 @@ from elasticai.experiment_framework.remote_control.callback_actions import (
 from elasticai.experiment_framework.remote_control.commands import (
     Command,
 )
+from elasticai.experiment_framework.remote_control.constants import (
+    NUM_MAX_RETRIES,
+    NackErrorCode,
+)
 from elasticai.experiment_framework.remote_control.exceptions import (
     InvalidChecksumError,
+    MessageRetransmissionError,
+    ReceivedNackError,
 )
 from elasticai.experiment_framework.remote_control.flags import Flags
 from elasticai.experiment_framework.remote_control.message import Message
@@ -352,8 +358,20 @@ class TestMessageRetransmission:
 
         assert len(task_manager._device.rx) == 3
 
+    @pytest.mark.asyncio
+    async def test_stops_after_max_retransmissions(self, task_manager, task1):
+        await task_manager.open_task(task1, need_ack=True)
+
+        expected_attempts = NUM_MAX_RETRIES + 1
+
+        assert len(task_manager._device.rx) == expected_attempts
+        assert all(
+            message == task_manager._device.rx[0] for message in task_manager._device.rx
+        )
+
 
 class TestChecksum:
+    @pytest.mark.asyncio
     async def test_sends_an_ack_when_invalid_checksum_and_ack(
         self, task_manager, task1
     ):
@@ -375,9 +393,138 @@ class TestChecksum:
 
         nack = Message(
             Command.NACK,
-            payload=b"",
+            payload=bytes([NackErrorCode.INVALID_CHECKSUM]),
             task_id=task1.task_id,
             msg_id=invalid_chunk_msg_id,
         )
 
         assert task_manager._device.rx[1] == nack
+
+
+class TestNackCodes:
+    @pytest.mark.asyncio
+    async def test_sends_proper_nack_code_on_unexpected_message(self, task_manager):
+        unexpected_chunk = Message(
+            Command.DATA_CHUNK,
+            payload=b"hello",
+            flags=Flags(need_ack=True, has_crc=True).to_number(),
+            task_id=0,
+            msg_id=0,
+        )
+        await task_manager._device.tx.put(unexpected_chunk)
+
+        await asyncio.sleep(0)
+
+        expected_nack = Message(
+            Command.NACK,
+            payload=bytes([NackErrorCode.UNEXPECTED_MESSAGE]),
+            task_id=0,
+            msg_id=0,
+        )
+        assert task_manager._device.rx[0] == expected_nack
+
+    @pytest.mark.asyncio
+    async def test_retransmits_on_nack_when_invalid_checksum(self, task_manager, task1):
+        open_task_coro = asyncio.get_running_loop().create_task(
+            task_manager.open_task(task1, need_ack=True)
+        )
+
+        while len(task_manager._device.rx) < 1:
+            await asyncio.sleep(0)
+
+        nack = Message(
+            Command.NACK,
+            payload=bytes([NackErrorCode.INVALID_CHECKSUM]),
+            task_id=task1.task_id,
+            msg_id=task1._next_msg_id - 1,
+        )
+
+        await task_manager._device.tx.put(nack)
+
+        await open_task_coro
+
+        assert task_manager._device.rx[0] == task_manager._device.rx[1]
+
+    @pytest.mark.asyncio
+    async def test_retransmits_then_succeeds(self, task_manager, task1):
+        task1.has_crx = True
+
+        open_task = asyncio.create_task(task_manager.open_task(task1, need_ack=True))
+
+        while len(task_manager._device.rx) < 1:
+            await asyncio.sleep(0)
+
+        nack = Message(
+            Command.NACK,
+            payload=bytes([NackErrorCode.INVALID_CHECKSUM]),
+            task_id=task1.task_id,
+            msg_id=task1._next_msg_id - 1,
+        )
+        await task_manager._device.tx.put(nack)
+
+        while len(task_manager._device.rx) < 2:
+            await asyncio.sleep(0)
+
+        retry = task_manager._device.rx[1]
+        ack = Message(
+            Command.ACK,
+            payload=b"",
+            task_id=task1.task_id,
+            msg_id=retry.header.msg_id,
+        )
+        await task_manager._device.tx.put(ack)
+
+        await open_task
+
+        assert task_manager._device.rx[0] == task_manager._device.rx[1]
+        assert len(task_manager._device.rx) == 2
+        assert task1.state == TaskState.OPENED
+
+    @pytest.mark.asyncio
+    async def test_does_not_retry_non_retryable_nack(self, task_manager, task1):
+        open_task_coro = asyncio.create_task(
+            task_manager.open_task(task1, need_ack=True)
+        )
+
+        await asyncio.sleep(0)
+
+        nack = Message(
+            Command.NACK,
+            payload=bytes([NackErrorCode.UNEXPECTED_MESSAGE]),
+            task_id=task1.task_id,
+            msg_id=task1._next_msg_id - 1,
+        )
+        await task_manager._device.tx.put(nack)
+
+        with pytest.raises(ReceivedNackError) as exc_info:
+            await open_task_coro
+
+        assert exc_info.value.error_code == NackErrorCode.UNEXPECTED_MESSAGE
+        assert len(task_manager._device.rx) == 1
+
+    @pytest.mark.asyncio
+    async def test_stops_after_retryable_nacks_max_retries(self, task_manager, task1):
+        open_task = asyncio.create_task(task_manager.open_task(task1, need_ack=True))
+
+        while len(task_manager._device.rx) < 1:
+            await asyncio.sleep(0)
+
+        for _ in range(NUM_MAX_RETRIES + 1):
+            expected_send_count = len(task_manager._device.rx) + 1
+            await task_manager._device.tx.put(
+                Message(
+                    Command.NACK,
+                    payload=bytes([NackErrorCode.INVALID_CHECKSUM]),
+                    task_id=task1.task_id,
+                    msg_id=task1._next_msg_id - 1,
+                )
+            )
+
+            if expected_send_count <= NUM_MAX_RETRIES + 1:
+                while len(task_manager._device.rx) < expected_send_count:
+                    await asyncio.sleep(0)
+
+        with pytest.raises(MessageRetransmissionError):
+            await open_task
+
+        assert len(task_manager._device.rx) == NUM_MAX_RETRIES + 1
