@@ -11,6 +11,10 @@ from elasticai.experiment_framework.remote_control.callback_actions import (
 from elasticai.experiment_framework.remote_control.commands import (
     Command,
 )
+from elasticai.experiment_framework.remote_control.constants import NackErrorCode
+from elasticai.experiment_framework.remote_control.exceptions import (
+    InvalidChecksumError,
+)
 from elasticai.experiment_framework.remote_control.flags import Flags
 from elasticai.experiment_framework.remote_control.message import Message
 from elasticai.experiment_framework.remote_control.task import (
@@ -28,7 +32,12 @@ class DummyMessageIO:
         self.rx: list[Message] = []
 
     async def read(self) -> Message:
-        return await self.tx.get()
+        item = await self.tx.get()
+
+        if isinstance(item, Exception):
+            raise item
+
+        return item
 
     async def write(self, msg: Message) -> None:
         self.rx.append(msg)
@@ -207,7 +216,7 @@ class TestDataChunks:
         chunk = Message(
             Command.DATA_CHUNK,
             payload=data,
-            flags=Flags(need_ack=True).to_byte(),
+            flags=Flags(need_ack=True).to_number(),
             task_id=task1.task_id,
             msg_id=chunk_msg_id,
         )
@@ -342,4 +351,34 @@ class TestMessageRetransmission:
 
         await open_task_future
 
-        assert len(task_manager._device.rx) >= 3
+        assert len(task_manager._device.rx) == 3
+
+
+class TestChecksum:
+    async def test_sends_an_ack_when_invalid_checksum_and_ack(
+        self, task_manager, task1
+    ):
+        await task_manager.open_task(task1)
+
+        invalid_chunk_msg_id = 0x1
+
+        invalid_chunk = Message(
+            Command.DATA_CHUNK,
+            payload=b"hello",
+            flags=Flags(need_ack=True, has_crc=True).to_number(),
+            task_id=task1.task_id,
+            msg_id=invalid_chunk_msg_id,
+        )
+
+        await task_manager._device.tx.put(InvalidChecksumError(invalid_chunk))
+
+        await asyncio.sleep(0)
+
+        nack = Message(
+            Command.NACK,
+            payload=bytes([NackErrorCode.INVALID_CHECKSUM]),
+            task_id=task1.task_id,
+            msg_id=invalid_chunk_msg_id,
+        )
+
+        assert task_manager._device.rx[1] == nack

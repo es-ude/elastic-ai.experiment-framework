@@ -8,12 +8,15 @@ from .constants import (
     MAX_TASKS,
     NUM_MAX_RETRIES,
     RESPONSE_TIMEOUT,
+    RETRY_DELAY_SECONDS,
+    RETRYABLE_NACK_CODES,
     RETURN_CODE_OFFSET,
+    NackErrorCode,
 )
 from .exceptions import (
+    MessageDecodeError,
     MessageRetransmissionError,
     ReceivedNackError,
-    UnexpectedMessageError,
 )
 from .helpers import format_message
 from .message import Message
@@ -48,7 +51,6 @@ class TaskManager:
         task._state = TaskState.OPENING
 
         task._task_id = task_id
-        msg_id = task._next_msg_id
 
         self._running_tasks[task_id] = task
 
@@ -57,14 +59,11 @@ class TaskManager:
         )
         await self._send_message(
             command=Command.OPEN_TASK,
-            task_id=task_id,
-            msg_id=msg_id,
-            task_def_id=task.task_def_id,
+            task=task,
             need_ack=need_ack,
         )
 
         task._state = TaskState.OPENED
-        task._next_msg_id += 1
 
         await self._run_callback(task, task.on_opened())
 
@@ -78,43 +77,28 @@ class TaskManager:
                 need_ack is None and task.need_ack
             )
 
-            msg_id = task._next_msg_id
             await self._send_message(
                 command=Command.CLOSE_TASK,
-                msg_id=msg_id,
-                task_id=task.task_id,
+                task=task,
                 need_ack=need_ack,
             )
 
             task._state = TaskState.CLOSED
-            task._next_msg_id += 1
-
             self._running_tasks.pop(task.task_id)
 
     async def send_chunk(
         self, task: Task, data: bytes, need_ack: bool | None = None
     ) -> None:
         task = self._running_tasks[task.task_id]
-        msg_id = task._next_msg_id
 
         need_ack = need_ack or (need_ack is None and task.need_ack)
 
-        try:
-            await self._send_message(
-                command=Command.DATA_CHUNK,
-                task_id=task.task_id,
-                msg_id=msg_id,
-                data=data,
-                need_ack=need_ack,
-            )
-            task._next_msg_id += 1
-
-        except ReceivedNackError:
-            task._pending_acks.pop(msg_id, None)
-
-            raise RuntimeError(
-                f"[Client] Nack received task_id={task.task_id} msg_id={msg_id}"
-            )
+        await self._send_message(
+            command=Command.DATA_CHUNK,
+            task=task,
+            data=data,
+            need_ack=need_ack,
+        )
 
     async def _on_message(self, message: Message) -> None:
         try:
@@ -124,11 +108,15 @@ class TaskManager:
             task = self._running_tasks.get(task_id)
 
             if task is None:
-                _logger.warning("[CLIENT]unknown task_id=%d", task_id)
+                _logger.warning(
+                    "[CLIENT] Unexpected message unknown task_id=%d", task_id
+                )
                 if need_ack:
-                    await self._send_nack(message)
-                    return
-                raise UnexpectedMessageError("%s", message)
+                    await self._send_nack(
+                        message,
+                        err_code=NackErrorCode.UNEXPECTED_MESSAGE,
+                    )
+                return
 
             handlers: dict[
                 Command,
@@ -154,19 +142,9 @@ class TaskManager:
 
             await handler(task, message)
 
-        except UnexpectedMessageError:
-            raise UnexpectedMessageError()
-
         except Exception as e:
             _logger.error("[CLIENT]error handling message: %s", e)
             raise
-
-    async def _send_nack(self, msg: Message):
-        task_id = msg.header.task_id
-
-        await self._send_message(
-            command=Command.NACK, task_id=task_id, msg_id=msg.header.msg_id
-        )
 
     async def _handle_ack(
         self,
@@ -195,7 +173,8 @@ class TaskManager:
     ) -> None:
         msg_id = message.header.msg_id
 
-        fut = task._pending_acks.pop(msg_id, None)
+        fut = task._pending_acks.get(msg_id, None)
+        error_code = NackErrorCode(message.payload[0])
 
         if fut is None:
             _logger.warning(
@@ -211,7 +190,7 @@ class TaskManager:
                 task.task_id,
                 msg_id,
             )
-            fut.set_exception(ReceivedNackError())
+            fut.set_exception(ReceivedNackError(error_code))
 
     async def _handle_chunk(
         self,
@@ -225,9 +204,7 @@ class TaskManager:
         task._state = TaskState.RECEIVED_DATA
 
         if flags.need_ack:
-            await self._send_message(
-                command=Command.ACK, task_id=task.task_id, msg_id=msg_id
-            )
+            await self._send_ack(message)
 
         await self._run_callback(task, task.on_data_chunk_received())
 
@@ -244,73 +221,110 @@ class TaskManager:
 
             flags = message.header.flags
 
-            if flags.need_ack:
-                await self._send_message(
-                    Command.ACK,
-                    task_id=task.task_id,
-                    msg_id=message.header.msg_id,
-                )
+        if flags.need_ack:
+            await self._send_ack(message)
 
         await self._run_callback(task, task.on_return())
 
     async def _send_message(
         self,
         command: Command,
-        task_id: int,
-        msg_id: int,
+        task: Task,
         *,
-        task_def_id: int = 0,
         data: bytes = b"",
         need_ack: bool = False,
     ) -> None:
+        msg_id = task._next_msg_id
+        task_id = task.task_id
+
         builder = (
             MessageBuilder()
             .set_command(command)
             .set_task_id(task_id)
             .set_msg_id(msg_id)
-            .set_task_def_id(task_def_id)
+            .set_task_def_id(task.task_def_id)
             .set_data(data)
             .set_need_ack(need_ack)
+            .set_crc(task.has_crx)
         )
 
         message = builder.build()
 
-        await self._device.write(message)
-
-        if command == Command.ACK or command == Command.NACK:
+        task._next_msg_id += 1
+        
+        if not need_ack:
+            await self._device.write(message)
             return
 
-        if need_ack:
-            task = self._running_tasks.get(task_id, None)
-            if task is None:
-                raise RuntimeError(f"[client] no task found with id {task_id}")
-            attempt = 0
+        attempt = 0
+        while True:
+            fut = asyncio.get_running_loop().create_future()
+            task._pending_acks[msg_id] = fut
+            
+            try:
 
-            while True:
-                try:
-                    fut = asyncio.get_running_loop().create_future()
-                    task._pending_acks[msg_id] = fut
+                await self._device.write(message)
+                await asyncio.wait_for(fut=fut, timeout=self._timeout)
+                return
 
-                    await asyncio.wait_for(fut=fut, timeout=self._timeout)
-                    return
+            except ReceivedNackError as exc:
+                if exc.error_code not in RETRYABLE_NACK_CODES:
+                    raise
+                attempt += 1
+                if attempt > NUM_MAX_RETRIES:
+                    raise MessageRetransmissionError(
+                        f"NACK {exc.error_code.name} after {NUM_MAX_RETRIES} retries"
+                    ) from exc
 
-                except ReceivedNackError:
-                    return
-                except TimeoutError:
-                    attempt += 1
-                    if attempt > NUM_MAX_RETRIES:
-                        break
+                if exc.error_code == NackErrorCode.OUT_OF_RESSOURCE:
+                    await asyncio.sleep(RETRY_DELAY_SECONDS)
 
-                    _logger.warning(
-                        "[Client] Message retransmissionmessage:%s number attempts:%d",
-                        format_message(message),
-                        attempt,
-                    )
-                    await self._device.write(message)
+                _logger.warning(
+                    "Retrying message after NACK: code=%s attempt=%d",
+                    exc.error_code.name,
+                    attempt,
+                )
+            except TimeoutError:
+                attempt += 1
+                if attempt > NUM_MAX_RETRIES:
+                    break
 
-            raise MessageRetransmissionError(
-                f"Failed to send the message after {NUM_MAX_RETRIES} retries:{message}"
-            )
+                _logger.warning(
+                    "[Client] Message retransmission, message:%s number attempts:%d",
+                    format_message(message),
+                    attempt,
+                )
+            finally:
+                task._pending_acks.pop(msg_id, None)
+
+        _logger.error(
+            f"Failed to send the message after {NUM_MAX_RETRIES} retries:{message}"
+        )
+
+    async def _send_nack(self, msg: Message, err_code: int):
+        task_id = msg.header.task_id
+
+        nack = (
+            MessageBuilder()
+            .set_command(Command.NACK)
+            .set_task_id(task_id)
+            .set_msg_id(msg.header.msg_id)
+            .set_data(int(err_code).to_bytes(length=1, byteorder="little"))
+        ).build()
+
+        await self._device.write(nack)
+
+    async def _send_ack(self, msg: Message):
+        task_id = msg.header.task_id
+
+        ack = (
+            MessageBuilder()
+            .set_command(Command.ACK)
+            .set_task_id(task_id)
+            .set_msg_id(msg.header.msg_id)
+        ).build()
+
+        await self._device.write(ack)
 
     async def _run_callback(self, task: Task, cb: AsyncIterable[CallbackAction]):
         async for action in cb:
@@ -341,7 +355,22 @@ class TaskManager:
         self._receiver_started.set()
 
         while self._running:
-            message = await self._device.read()
-            await self._on_message(message)
+            try:
+                message = await self._device.read()
+                await self._on_message(message)
 
+            except MessageDecodeError as exc:
+                if (
+                    exc.message is not None
+                    and exc.nack_code is not None
+                    and exc.message.header.flags.need_ack
+                ):
+                    await self._send_nack(exc.message, err_code=exc.nack_code)
+                else:
+                    _logger.warning("[CLIENT] Discarding invalid message: %s", exc)
+
+            except Exception as exc:
+                _logger.warning(
+                    "[Client] Receive loop Execption has been raised %s", exc
+                )
         self._running = False
