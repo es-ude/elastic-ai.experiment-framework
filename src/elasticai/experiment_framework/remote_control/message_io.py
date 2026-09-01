@@ -1,12 +1,12 @@
 import logging
 
-from .constants import HEADER_SIZE, SYNC_BYTE
+from .constants import HEADER_SIZE, NUM_BYTES_CHECKSUM, SYNC_BYTE
 from .exceptions import (
-    InvalidChecksumError,
     InvalidHeaderError,
     InvalidMsgIdError,
     InvalidPayloadLenError,
     InvalidTaskIdError,
+    MessageDecodeError,
     MessageFramingError,
 )
 from .header import Header
@@ -47,16 +47,23 @@ class MessageIO:
             header = Header.from_bytes(header_bytes)
         except HEADER_ERRORS as exc:
             self._logger.warning("[CLIENT] failed to parse header: %s", exc)
-            raise MessageFramingError("malformed header, stream resynced") from exc
+            
+            raise MessageFramingError(
+                "malformed header, stream will be resynced") from exc
 
         try:
             payload = await self._do_read(header.payload_len)
-            msg = Message.from_bytes(header_bytes + payload)
+
+            checksum = b""
+            if header.flags.has_crc:
+                checksum = await self._do_read(NUM_BYTES_CHECKSUM)
+                
+            msg = Message.parse(header_bytes + payload+checksum)
             self._logger.debug(
                 "[CLIENT] received message: %s", format_message(msg), stacklevel=3
             )
             return msg
-        except InvalidChecksumError:
+        except MessageDecodeError:
             raise
         except Exception as exc:
             self._logger.warning("[CLIENT] failed to parse message: %s", exc)

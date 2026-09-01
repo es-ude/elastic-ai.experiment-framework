@@ -11,6 +11,7 @@ from elasticai.experiment_framework.remote_control.callback_actions import (
 from elasticai.experiment_framework.remote_control.commands import (
     Command,
 )
+from elasticai.experiment_framework.remote_control.constants import NackErrorCode
 from elasticai.experiment_framework.remote_control.exceptions import (
     InvalidChecksumError,
 )
@@ -375,7 +376,7 @@ class TestChecksum:
 
         nack = Message(
             Command.NACK,
-            payload=b"",
+            payload=bytes([NackErrorCode.INVALID_CHECKSUM]),
             task_id=task1.task_id,
             msg_id=invalid_chunk_msg_id,
         )

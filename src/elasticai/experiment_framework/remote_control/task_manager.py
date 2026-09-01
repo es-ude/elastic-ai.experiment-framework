@@ -8,10 +8,14 @@ from .constants import (
     MAX_TASKS,
     NUM_MAX_RETRIES,
     RESPONSE_TIMEOUT,
+    RETRY_DELAY_SECONDS,
+    RETRYABLE_NACK_CODES,
     RETURN_CODE_OFFSET,
+    NackErrorCode,
 )
 from .exceptions import (
-    InvalidChecksumError,
+    MessageDecodeError,
+    MessageRetransmissionError,
     ReceivedNackError,
 )
 from .helpers import format_message
@@ -86,24 +90,15 @@ class TaskManager:
         self, task: Task, data: bytes, need_ack: bool | None = None
     ) -> None:
         task = self._running_tasks[task.task_id]
-        msg_id = task._next_msg_id
 
         need_ack = need_ack or (need_ack is None and task.need_ack)
 
-        try:
-            await self._send_message(
-                command=Command.DATA_CHUNK,
-                task=task,
-                data=data,
-                need_ack=need_ack,
-            )
-
-        except ReceivedNackError:
-            task._pending_acks.pop(msg_id, None)
-
-            raise RuntimeError(
-                f"[Client] Nack received task_id={task.task_id} msg_id={msg_id}"
-            )
+        await self._send_message(
+            command=Command.DATA_CHUNK,
+            task=task,
+            data=data,
+            need_ack=need_ack,
+        )
 
     async def _on_message(self, message: Message) -> None:
         try:
@@ -117,7 +112,10 @@ class TaskManager:
                     "[CLIENT] Unexpected message unknown task_id=%d", task_id
                 )
                 if need_ack:
-                    await self._send_nack(message)
+                    await self._send_nack(
+                        message,
+                        err_code=NackErrorCode.UNEXPECTED_MESSAGE,
+                    )
                 return
 
             handlers: dict[
@@ -146,7 +144,7 @@ class TaskManager:
 
         except Exception as e:
             _logger.error("[CLIENT]error handling message: %s", e)
-            raise Exception
+            raise
 
     async def _handle_ack(
         self,
@@ -175,7 +173,8 @@ class TaskManager:
     ) -> None:
         msg_id = message.header.msg_id
 
-        fut = task._pending_acks.pop(msg_id, None)
+        fut = task._pending_acks.get(msg_id, None)
+        error_code = NackErrorCode(message.payload[0])
 
         if fut is None:
             _logger.warning(
@@ -191,7 +190,7 @@ class TaskManager:
                 task.task_id,
                 msg_id,
             )
-            fut.set_exception(ReceivedNackError())
+            fut.set_exception(ReceivedNackError(error_code))
 
     async def _handle_chunk(
         self,
@@ -251,42 +250,58 @@ class TaskManager:
 
         message = builder.build()
 
-        await self._device.write(message)
         task._next_msg_id += 1
+        
+        if not need_ack:
+            await self._device.write(message)
+            return
 
-        if need_ack:
-            if task is None:
-                raise RuntimeError(f"[client] no task found with id {task_id}")
-            attempt = 0
+        attempt = 0
+        while True:
+            fut = asyncio.get_running_loop().create_future()
+            task._pending_acks[msg_id] = fut
+            
+            try:
 
-            while True:
-                try:
-                    fut = asyncio.get_running_loop().create_future()
-                    task._pending_acks[msg_id] = fut
+                await self._device.write(message)
+                await asyncio.wait_for(fut=fut, timeout=self._timeout)
+                return
 
-                    await asyncio.wait_for(fut=fut, timeout=self._timeout)
+            except ReceivedNackError as exc:
+                if exc.error_code not in RETRYABLE_NACK_CODES:
+                    raise
+                attempt += 1
+                if attempt > NUM_MAX_RETRIES:
+                    raise MessageRetransmissionError(
+                        f"NACK {exc.error_code.name} after {NUM_MAX_RETRIES} retries"
+                    ) from exc
 
-                    return
+                if exc.error_code == NackErrorCode.OUT_OF_RESSOURCE:
+                    await asyncio.sleep(RETRY_DELAY_SECONDS)
 
-                except ReceivedNackError:
-                    return
-                except TimeoutError:
-                    attempt += 1
-                    if attempt > NUM_MAX_RETRIES:
-                        break
+                _logger.warning(
+                    "Retrying message after NACK: code=%s attempt=%d",
+                    exc.error_code.name,
+                    attempt,
+                )
+            except TimeoutError:
+                attempt += 1
+                if attempt > NUM_MAX_RETRIES:
+                    break
 
-                    _logger.warning(
-                        "[Client] Message retransmissionmessage:%s number attempts:%d",
-                        format_message(message),
-                        attempt,
-                    )
-                    await self._device.write(message)
+                _logger.warning(
+                    "[Client] Message retransmission, message:%s number attempts:%d",
+                    format_message(message),
+                    attempt,
+                )
+            finally:
+                task._pending_acks.pop(msg_id, None)
 
-            _logger.error(
-                f"Failed to send the message after {NUM_MAX_RETRIES} retries:{message}"
-            )
+        _logger.error(
+            f"Failed to send the message after {NUM_MAX_RETRIES} retries:{message}"
+        )
 
-    async def _send_nack(self, msg: Message):
+    async def _send_nack(self, msg: Message, err_code: int):
         task_id = msg.header.task_id
 
         nack = (
@@ -294,6 +309,7 @@ class TaskManager:
             .set_command(Command.NACK)
             .set_task_id(task_id)
             .set_msg_id(msg.header.msg_id)
+            .set_data(int(err_code).to_bytes(length=1, byteorder="little"))
         ).build()
 
         await self._device.write(nack)
@@ -343,9 +359,15 @@ class TaskManager:
                 message = await self._device.read()
                 await self._on_message(message)
 
-            except InvalidChecksumError as exc:
-                if exc.message.header.flags.need_ack:
-                    await self._send_nack(exc.message)
+            except MessageDecodeError as exc:
+                if (
+                    exc.message is not None
+                    and exc.nack_code is not None
+                    and exc.message.header.flags.need_ack
+                ):
+                    await self._send_nack(exc.message, err_code=exc.nack_code)
+                else:
+                    _logger.warning("[CLIENT] Discarding invalid message: %s", exc)
 
             except Exception as exc:
                 _logger.warning(

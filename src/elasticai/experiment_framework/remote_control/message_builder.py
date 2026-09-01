@@ -47,7 +47,9 @@ class MessageBuilder:
 
     def build(self) -> Message:
         match self.command:
-            case Command.NACK | Command.ACK:
+            case Command.NACK:
+                return self._new_msg(self.data)
+            case Command.ACK:
                 return self._new_msg()
             case Command.OPEN_TASK:
                 return self._new_msg(self._get_number_in_bytes(self.task_def_id))

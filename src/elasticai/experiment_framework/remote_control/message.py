@@ -5,9 +5,14 @@ from crc import Calculator, Crc8
 
 from .commands import Command
 from .constants import HEADER_SIZE, NUM_BYTES_CHECKSUM
-from .exceptions import InvalidChecksumError, InvalidPayloadLenError
+from .exceptions import (
+    InvalidChecksumError,
+    InvalidCommandPayloadError,
+    InvalidPayloadLenError,
+)
 from .flags import Flags
 from .header import Header
+from .message_validators import validate_payload
 
 _calculator = Calculator(Crc8.CCITT.value)
 
@@ -55,13 +60,16 @@ class Message:
         return data
 
     @classmethod
-    def from_bytes(
+    def parse(
         cls, raw: bytes, byte_order: Literal["little", "big"] = "little"
     ) -> "Message":
         header = Header.from_bytes(raw[:HEADER_SIZE])
         payload = raw[HEADER_SIZE:]
 
         if header.flags.has_crc:
+            if len(payload) < NUM_BYTES_CHECKSUM:
+                raise InvalidPayloadLenError("message is missing its checksum")
+
             received_crc = int.from_bytes(
                 payload[-NUM_BYTES_CHECKSUM:],
                 byteorder=byte_order,
@@ -69,33 +77,17 @@ class Message:
             payload = payload[:-NUM_BYTES_CHECKSUM]
             message_without_crc = raw[:-NUM_BYTES_CHECKSUM]
 
-            message = cls(
-                command=header.command,
-                payload=payload,
-                flags=header.flags.to_number(),
-                task_id=header.task_id,
-                msg_id=header.msg_id,
-                byte_order=byte_order,
-            )
-
-            if not _calculator.verify(message_without_crc, received_crc):
-                _logger.error(
-                    "[Client] Invalid checksum, Header:%s, Payload: %s checksum=%s ",
-                    header,
-                    payload,
-                    received_crc,
-                )
-                raise InvalidChecksumError(message)
-
         if len(payload) != header.payload_len:
             _logger.error(
                 "[Client] Message payload length invalid, Header:%s, payload:%s",
                 header,
                 payload,
             )
-            raise InvalidPayloadLenError
+            raise InvalidPayloadLenError(
+                f"expected {header.payload_len} payload bytes, got {len(payload)}"
+            )
 
-        return cls(
+        message = cls(
             command=header.command,
             payload=payload,
             flags=header.flags.to_number(),
@@ -103,6 +95,24 @@ class Message:
             msg_id=header.msg_id,
             byte_order=byte_order,
         )
+
+        if header.flags.has_crc and not _calculator.verify(
+            message_without_crc, received_crc
+        ):
+            _logger.error(
+                "[Client] Invalid checksum, Header:%s, Payload: %s checksum=%s ",
+                header,
+                payload,
+                received_crc,
+            )
+            raise InvalidChecksumError(message)
+
+        try:
+            validate_payload(header.command, payload)
+        except InvalidCommandPayloadError as exc:
+            raise InvalidCommandPayloadError(str(exc), message) from exc
+
+        return message
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Message):
