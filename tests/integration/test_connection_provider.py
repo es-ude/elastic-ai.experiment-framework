@@ -1,11 +1,12 @@
 import asyncio
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from elasticai.experiment_framework.remote_control.connection_provider import (
     ConnectionProvider,
 )
+from elasticai.experiment_framework.remote_control.io_stream import IOStream
 
 
 @pytest.fixture
@@ -25,30 +26,63 @@ async def tcp_server():
     await server.wait_closed()
 
 
-async def test_connect_success(tcp_server):
-    host, port = tcp_server
-    provider = ConnectionProvider()
-    async with provider.connectTCP(host, port) as stream:
-        assert stream is not None
+class TestTCPConnection:
+    async def test_connect_success(self, tcp_server):
+        host, port = tcp_server
+        provider = ConnectionProvider()
+        async with provider.connectTCP(host, port) as stream:
+            assert stream is not None
+
+    async def test_retries_on_failure(self):
+        call_count = 0
+
+        async def failing_then_succeeding(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise ConnectionRefusedError("not ready yet")
+            return (None, MagicMock())
+
+        with patch(
+            "elasticai.experiment_framework.remote_control.connection_provider.asyncio.get_running_loop"
+        ) as mock_loop:
+            mock_loop.return_value.create_connection = failing_then_succeeding
+
+            provider = ConnectionProvider(max_trials=5)
+            async with provider.connectTCP("host", 12):
+                pass
+
+        assert call_count == 3
 
 
-async def test_retries_on_failure():
-    call_count = 0
+class TestSerialConnection:
+    def setup_method(self) -> None:
 
-    async def failing_then_succeeding(*args, **kwargs):
-        nonlocal call_count
-        call_count += 1
-        if call_count < 3:
-            raise ConnectionRefusedError("not ready yet")
-        return (None, MagicMock())
+        self.port = "/dev/ttyACM0"
+        self.baudrate = 115200
 
-    with patch(
-        "elasticai.experiment_framework.remote_control.connection_provider.asyncio.get_running_loop"
-    ) as mock_loop:
-        mock_loop.return_value.create_connection = failing_then_succeeding
+    @pytest.mark.hardware
+    async def test_connect_success(self):
 
-        provider = ConnectionProvider(max_trials=5)
-        async with provider.connectTCP("host", 12):
-            pass
+        provider = ConnectionProvider()
+        async with provider.connectSerial(self.port, self.baudrate) as stream:
+            assert stream is not None
+            assert isinstance(stream, IOStream)
 
-    assert call_count == 3
+    async def test_retries_on_failure(self):
+        with patch(
+            "elasticai.experiment_framework.remote_control.connection_provider.serial_asyncio"
+        ) as mock_serial_asyncio:
+            mock_serial_asyncio.create_serial_connection = AsyncMock(
+                side_effect=[
+                    ConnectionRefusedError("not ready yet"),
+                    ConnectionRefusedError("not ready yet"),
+                    (None, MagicMock()),
+                ]
+            )
+
+            provider = ConnectionProvider(max_trials=5)
+            async with provider.connectSerial(self.port, self.baudrate):
+                ...
+
+        assert mock_serial_asyncio.create_serial_connection.call_count == 3

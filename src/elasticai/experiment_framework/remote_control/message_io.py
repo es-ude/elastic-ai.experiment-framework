@@ -1,10 +1,25 @@
 import logging
 
-from .constants import HEADER_SIZE
+from .constants import HEADER_SIZE, SYNC_BYTE
+from .exceptions import (
+    InvalidChecksumError,
+    InvalidHeaderError,
+    InvalidMsgIdError,
+    InvalidPayloadLenError,
+    InvalidTaskIdError,
+    MessageFramingError,
+)
 from .header import Header
 from .helpers import format_message
 from .io_stream import IOStream
 from .message import Message
+
+HEADER_ERRORS = (
+    InvalidHeaderError,
+    InvalidMsgIdError,
+    InvalidPayloadLenError,
+    InvalidTaskIdError,
+)
 
 
 class MessageIO:
@@ -17,22 +32,37 @@ class MessageIO:
         self._logger.debug(f"[CLIENT] read data {num_bytes} bytes {data}", stacklevel=2)
         return bytes(data)
 
+    async def _sync(self) -> bytes:
+        while True:
+            b = await self._do_read(1)
+            if b and b[0] == SYNC_BYTE:
+                return b
+            self._logger.warning("[CLIENT] resync: discarding byte %r", b)
+
     async def read(self) -> Message:
-        header_bytes = await self._do_read(HEADER_SIZE)
-        self._logger.debug(
-            "[CLIENT] received header: %s", header_bytes.hex(), stacklevel=3
-        )
-        header = Header.from_bytes(header_bytes)
+        sync = await self._sync()
 
-        payload = await self._do_read(header.payload_len)
-        self._logger.debug("[CLIENT] received payload: %s", payload.hex(), stacklevel=3)
+        try:
+            header_bytes = sync + await self._do_read(HEADER_SIZE - 1)
+            header = Header.from_bytes(header_bytes)
+        except HEADER_ERRORS as exc:
+            self._logger.warning("[CLIENT] failed to parse header: %s", exc)
+            raise MessageFramingError("malformed header, stream resynced") from exc
 
-        msg = Message.from_bytes(header_bytes + payload)
-        self._logger.debug(
-            "[CLIENT] received message: %s", format_message(msg), stacklevel=3
-        )
-
-        return msg
+        try:
+            payload = await self._do_read(header.payload_len)
+            msg = Message.from_bytes(header_bytes + payload)
+            self._logger.debug(
+                "[CLIENT] received message: %s", format_message(msg), stacklevel=3
+            )
+            return msg
+        except InvalidChecksumError:
+            raise
+        except Exception as exc:
+            self._logger.warning("[CLIENT] failed to parse message: %s", exc)
+            raise MessageFramingError(
+                "malformed message, stream resynced to next sync byte"
+            ) from exc
 
     async def write(self, msg: Message) -> None:
         self._logger.debug(
