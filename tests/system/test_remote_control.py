@@ -236,8 +236,7 @@ class TestClient:
                 if count == 0:
                     await manager._send_message(
                         Command.ACK,
-                        task_id=task.task_id,
-                        msg_id=message.header.msg_id,
+                        task = task
                     )
 
             monkeypatch.setattr(manager, "_handle_chunk", ignore_twice_before_ack)
