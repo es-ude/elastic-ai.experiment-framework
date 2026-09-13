@@ -15,8 +15,15 @@ from elasticai.experiment_framework.remote_control.callback_actions import (
     CallbackAction,
     NoAction,
 )
+from elasticai.experiment_framework.remote_control.commands import Command
 from elasticai.experiment_framework.remote_control.connection_provider import (
     ConnectionProvider,
+)
+from elasticai.experiment_framework.remote_control.constants import (
+    NackErrorCode,
+)
+from elasticai.experiment_framework.remote_control.exceptions import (
+    MessageRetransmissionError,
 )
 from elasticai.experiment_framework.remote_control.message_io import (
     MessageIO,
@@ -229,7 +236,7 @@ class TestTCPClient:
             count -= 1
 
             if count == 0:
-                await manager._send_ack(message)
+                await manager._send_message(Command.ACK, task=task)
 
         monkeypatch.setattr(manager, "_handle_chunk", ignore_twice_before_ack)
 
@@ -276,6 +283,8 @@ class TestTCPClient:
             open_task_coro = asyncio.create_task(manager.open_task(task, need_ack=True))
             await asyncio.sleep(0.1)
 
-            await open_task_coro
+            with pytest.raises(MessageRetransmissionError) as exc:
+                await open_task_coro
 
             manager._handle_nack.assert_called()
+            #assert exc.value == NackErrorCode.INVALID_CHECKSUM
