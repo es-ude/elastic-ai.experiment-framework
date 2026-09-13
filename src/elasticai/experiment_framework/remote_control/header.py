@@ -5,6 +5,7 @@ from .commands import Command
 from .constants import (
     HEADER_FORMAT,
     HEADER_SIZE,
+    MAX_MESSAGE_PER_TASK,
     MAX_TASKS,
     SYNC_BYTE,
     MAX_PAYLOAD_lEN,
@@ -31,8 +32,8 @@ class Header:
             raise TypeError(f"expected Command, got {type(self.command)}")
         if not isinstance(self.flags, Flags):
             raise TypeError(f"expected Flags, got {type(self.flags)}")
-        if not 0 <= self.msg_id <= MAX_TASKS:
-            raise InvalidMsgIdError(f"msg_id out of range: {self.task_id}")
+        if not 0 <= self.msg_id <= MAX_MESSAGE_PER_TASK:...
+            #raise InvalidMsgIdError(f"msg_id out of range: {self.task_id}")
         if not 0 <= self.task_id <= MAX_TASKS:
             raise InvalidTaskIdError(f"task_id out of range: {self.task_id}")
         if not 0 <= self.payload_len <= MAX_PAYLOAD_lEN:
@@ -45,7 +46,7 @@ class Header:
             HEADER_FORMAT,
             SYNC_BYTE,
             int(self.command),
-            self.flags.to_byte(),
+            self.flags.to_number(),
             self.task_id,
             self.msg_id,
             self.payload_len,
@@ -65,7 +66,7 @@ class Header:
         )
         return cls(
             command=Command.from_value(bytes([cmd])),
-            flags=Flags.from_byte(flags),
+            flags=Flags.from_number(flags),
             task_id=task_id,
             msg_id=msg_id,
             payload_len=payload_len,
