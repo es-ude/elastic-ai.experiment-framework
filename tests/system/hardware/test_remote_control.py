@@ -4,7 +4,7 @@ import subprocess
 import time
 from pathlib import Path
 from typing import AsyncGenerator
-from unittest.mock import AsyncMock, PropertyMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
@@ -16,6 +16,9 @@ from elasticai.experiment_framework.remote_control.callback_actions import (
 from elasticai.experiment_framework.remote_control.devices import (
     _DeviceSpec,
     probe_for_devices,
+)
+from elasticai.experiment_framework.remote_control.message import (
+    Message,
 )
 from elasticai.experiment_framework.remote_control.message_io import (
     MessageIO,
@@ -248,29 +251,35 @@ class TestSerialClient:
         assert task.received_data[0] == data
 
     @pytest.mark.asyncio
-    async def test_wrong_checksum_send_nack_if_need_ack(self, manager):
+    async def test_wrong_checksum_then_retry(self, manager):
         data = b"abcdefghijkl"
 
         task = DummyTask(task_def_id=0, msg=data)
         task.has_crc = True
         task.timeout = 0.5
 
-        with patch(
-            "elasticai.experiment_framework.remote_control.message.Message.checksum",
-            new_callable=PropertyMock,
-        ) as checksum_mock:
-            checksum_mock.return_value = 0
+        original_to_bytes = Message.to_bytes
+        attempts = 0
 
-            original = manager._handle_nack
+        def to_bytes(message):
+            nonlocal attempts
 
-            manager._handle_nack = AsyncMock(wraps=original)
+            result = original_to_bytes(message)
 
-            open_task_coro = asyncio.create_task(manager.open_task(task, need_ack=True))
-            await asyncio.sleep(0.1)
+            if attempts == 0:
+                attempts += 1
+                result = result[:-1] + bytes([result[-1] ^ 0xFF])
 
-            await open_task_coro
+            return result
 
-            manager._handle_nack.assert_called()
+        with patch.object(Message, "to_bytes", to_bytes):
+            manager._handle_nack = AsyncMock(wraps=manager._handle_nack)
+
+            await manager.open_task(task, need_ack=True)
+
+        manager._handle_nack.assert_awaited()
+
+        assert task.state == TaskState.OPENED
 
     @pytest.mark.asyncio
     async def test_flash(self, manager, monkeypatch):
