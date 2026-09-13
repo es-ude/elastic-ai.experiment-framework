@@ -113,7 +113,7 @@ int frame_builder_data_chunk(Frame *frame, uint8_t flags, uint8_t *data, uint16_
     return amount_chunks;
 }
 
-int frame_builder_nack(Frame *frame, uint8_t transaction_id, uint8_t data_id)
+int frame_builder_nack(Frame *frame, uint8_t transaction_id, uint8_t data_id, uint8_t nack_code)
 {
     *frame = (Frame){
         .header = {
@@ -121,8 +121,9 @@ int frame_builder_nack(Frame *frame, uint8_t transaction_id, uint8_t data_id)
             .message_type = NACK,
             .flags = 0,
             .msg_id = data_id,
-            .payload_len = 0,
-            .transaction_id = transaction_id}};
+            .payload_len = 1,
+            .transaction_id = transaction_id},
+        .payload[0] = nack_code};
 
     return 0;
 }

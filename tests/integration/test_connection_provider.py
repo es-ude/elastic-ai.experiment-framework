@@ -69,6 +69,7 @@ class TestSerialConnection:
             assert stream is not None
             assert isinstance(stream, IOStream)
 
+    @pytest.mark.hardware
     async def test_retries_on_failure(self):
         with patch(
             "elasticai.experiment_framework.remote_control.connection_provider.serial_asyncio"
