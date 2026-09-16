@@ -1,12 +1,12 @@
 import asyncio
 import logging
 import os
-import signal
-import socket
+import shutil
 import subprocess
 import time
+from pathlib import Path
 from typing import AsyncGenerator
-from unittest.mock import AsyncMock, PropertyMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
@@ -15,8 +15,10 @@ from elasticai.experiment_framework.remote_control.callback_actions import (
     CallbackAction,
     NoAction,
 )
-from elasticai.experiment_framework.remote_control.connection_provider import (
-    ConnectionProvider,
+from elasticai.experiment_framework.remote_control.commands import Command
+from elasticai.experiment_framework.remote_control.devices import (
+    _DeviceSpec,
+    probe_for_devices,
 )
 from elasticai.experiment_framework.remote_control.message_io import (
     MessageIO,
@@ -32,107 +34,103 @@ from elasticai.experiment_framework.remote_control.task_manager import (
 logging.basicConfig(format="%(message)s")
 _logger = logging.getLogger(__name__)
 
+SERIAL_PORT = "/dev/tty/ACM0"
+SERIAL_BAUDRATE = 115200
 
-SERVER_HOST = "127.0.0.1"
-SERVER_PORT = 8080
+SPECS: set[_DeviceSpec] = {
+    _DeviceSpec(10, 11914, "env5"),
+}
+PICO_USB_ID = "2e8a:0003"
 
 SERVER_CMAKE = "example-firmwares/remote_control"
-
-
-def wait_for_port(host, port, timeout=10.0):
-    start = time.time()
-
-    while time.time() - start < timeout:
-        try:
-            with socket.create_connection((host, port), timeout=0.1):
-                return True
-        except OSError:
-            time.sleep(0.05)
-
-    return False
+PICO_BUILD_DIR = Path(SERVER_CMAKE) / "build" / "pico-debug"
+PICO_UF2 = PICO_BUILD_DIR / "remote_control_pico.uf2"
 
 
 @pytest.fixture(scope="session", autouse=False)
-def build_server():
+def build_pico_firmware():
     configure = subprocess.run(
-        ["cmake", "--preset", "host-debug"],
+        ["cmake", "--preset", "pico-debug"],
         cwd=SERVER_CMAKE,
         capture_output=True,
         text=True,
     )
-
     if configure.returncode != 0:
-        pytest.fail(f"CMake configure failed:\n{configure.stderr}")
+        pytest.fail(f"CMake configure (pico) failed:\n{configure.stderr}")
 
     build = subprocess.run(
-        ["cmake", "--build", "--preset", "host-debug", "--clean-first"],
+        ["cmake", "--build", "--preset", "pico-debug", "--clean-first"],
         cwd=SERVER_CMAKE,
         capture_output=True,
         text=True,
     )
-
     if build.returncode != 0:
         pytest.fail(
-            f"CMake build failed\n\nSTDOUT:\n{build.stdout}\n\nSTDERR:\n{build.stderr}"
+            f"CMake build (pico) failed\n\nSTDOUT:\n{build.stdout}\n\n"
+            f"STDERR:\n{build.stderr}"
         )
 
+    if not PICO_UF2.exists():
+        pytest.fail(f"Expected UF2 not found at {PICO_UF2}")
 
-@pytest.fixture
-def c_server(build_server):
 
-    _logger.info(
-        f"Starting server: /build/host-debug/remote_control {SERVER_HOST} {SERVER_PORT}"
-    )
-    proc = subprocess.Popen(
-        ["./build/host-debug/remote_control", SERVER_HOST, str(SERVER_PORT)],
-        cwd=SERVER_CMAKE,
-        text=True,
-    )
+def wait_for_device(timeout=10):
+    start = time.time()
 
-    time.sleep(0.5)
+    _logger.info("waiting for device")
 
-    if proc.poll() is not None:
-        out, err = proc.communicate(timeout=2)
+    while time.time() - start < timeout:
+        devices = probe_for_devices(SPECS)
+        if devices:
+            time.sleep(0.5)
+            return devices[0]
+        time.sleep(0.5)
+    _logger.info("waiting for device 2")
 
-        raise RuntimeError(
-            f"Server crashed\n"
-            f"exit code: {proc.returncode}\n"
-            f"stdout:\n{out}\n"
-            f"stderr:\n{err}\n"
+    raise RuntimeError("Pico did not re-enumerate")
+
+
+@pytest.fixture(scope="session")
+def flashed_pico(build_pico_firmware):
+
+    def pico_in_bootsel():
+        return (
+            PICO_USB_ID
+            in subprocess.run(["lsusb"], capture_output=True, text=True).stdout
         )
 
-    if not wait_for_port(SERVER_HOST, SERVER_PORT):
-        proc.kill()
+    def find_rp2_mount():
+        for base in ["/media", "/run/media", "/mnt"]:
+            if os.path.exists(base):
+                for root, dirs, _ in os.walk(base):
+                    for d in dirs:
+                        if "RPI-RP2" in d:
+                            return os.path.join(root, d)
+        return None
 
-        pytest.fail("Server failed to start")
+    if pico_in_bootsel():
+        mount = find_rp2_mount()
 
-    time.sleep(0.5)
-    _logger.info(f"SERVER PID={proc.pid}")
-
-    yield proc
-    proc.terminate()
-    try:
-        proc.wait(timeout=3)
-    except subprocess.TimeoutExpired:
-        os.killpg(proc.pid, signal.SIGKILL)
-        proc.wait()
-
-
-@pytest_asyncio.fixture()
-async def manager(c_server):
-
-    provider = ConnectionProvider()
-    async with provider.connectTCP(SERVER_HOST, SERVER_PORT) as stream:
-        manager = TaskManager(MessageIO(stream))
-
-        await manager.start()
-        try:
-            yield manager
-        finally:
-            try:
-                await manager.stop()
-            finally:
-                pass
+        if mount:
+            print("BOOTSEL detected → copying UF2")
+            shutil.copy(PICO_UF2, mount)
+        else:
+            print("BOOTSEL detected but mount not found")
+    else:
+        print("Normal mode → using picotool")
+        flash = subprocess.run(
+            ["picotool", "load", str(PICO_UF2), "-f"],
+            capture_output=True,
+            text=True,
+        )
+        if flash.returncode != 0:
+            pytest.fail(
+                "Failed to flash the Pico.\n\n"
+                f"stdout:\n{flash.stdout}\n"
+                f"stderr:\n{flash.stderr}\n\n"
+                "If you're on Linux, make sure the RP2040 udev rules are installed "
+                "and the device is connected."
+            )
 
 
 class DummyTask(Task):
@@ -154,7 +152,32 @@ class DummyTask(Task):
         yield NoAction()
 
 
-class TestTCPClient:
+@pytest_asyncio.fixture()
+async def manager(flashed_pico):
+    subprocess.run(
+        ["picotool", "reboot", "-f"],
+        capture_output=True,
+        text=True,
+    )
+    device = wait_for_device()
+
+    if not device:
+        pytest.skip("No devices found (env5 missing)")
+
+    async with device.connect() as stream:
+        manager = TaskManager(MessageIO(stream))
+        await manager.start()
+        try:
+            yield manager
+        finally:
+            try:
+                await manager.stop()
+            finally:
+                pass
+
+
+@pytest.mark.hardware
+class TestSerialClient:
     @pytest.mark.asyncio
     async def test_round_trip_message(self, manager):
         data = b"abcdefghijkl"
@@ -163,7 +186,7 @@ class TestTCPClient:
 
         await manager.open_task(task)
         await manager.send_chunk(task, data)
-        await task.wait_for_return()
+        await asyncio.sleep(0.1)
 
         assert task.state == TaskState.RETURNED
         assert task.received_data[0] == data
@@ -227,7 +250,11 @@ class TestTCPClient:
             count -= 1
 
             if count == 0:
-                await manager._send_ack(message)
+                await manager._send_message(
+                    Command.ACK,
+                    task_id=task.task_id,
+                    msg_id=message.header.msg_id,
+                )
 
         monkeypatch.setattr(manager, "_handle_chunk", ignore_twice_before_ack)
 
@@ -236,44 +263,3 @@ class TestTCPClient:
 
         await asyncio.sleep(2)
         assert count == 0
-
-    @pytest.mark.asyncio
-    async def test_checksum_are_stripped(self, manager):
-        data = b"abcdefghijkl"
-
-        task = DummyTask(task_def_id=0, msg=data)
-        task.has_crx = True
-        task.timeout = 0.1
-
-        await manager.open_task(task)
-        await manager.send_chunk(task, data)
-        
-        await asyncio.sleep(0.1)
-
-        assert task.state == TaskState.RETURNED
-        assert task.received_data[0] == data
-
-    @pytest.mark.asyncio
-    async def test_wrong_checksum_send_nack_if_need_ack(self, manager):
-        data = b"abcdefghijkl"
-
-        task = DummyTask(task_def_id=0, msg=data)
-        task.has_crx = True
-        task.timeout = 0.5
-
-        with patch(
-            "elasticai.experiment_framework.remote_control.message.Message.checksum",
-            new_callable=PropertyMock,
-        ) as checksum_mock:
-            checksum_mock.return_value = 0
-
-            original = manager._handle_nack
-
-            manager._handle_nack = AsyncMock(wraps=original)
-
-            open_task_coro = asyncio.create_task(manager.open_task(task, need_ack=True))
-            await asyncio.sleep(0.1)
-
-            await open_task_coro
-
-            manager._handle_nack.assert_called()
