@@ -454,3 +454,17 @@ class TestSerialClient:
 
         assert task.received_data[0] != data
 
+
+    @pytest.mark.asyncio
+    async def test_periodic(self, manager, monkeypatch):
+        data = b"Hallo Welt!"
+
+        task = DummyTask(task_def_id=16, msg=data)
+        task.timeout = 0.1
+
+        await manager.open_task(task)
+        await manager.send_chunk(task, data)
+
+        await asyncio.sleep(10)
+
+        assert task.received_data[0] == data

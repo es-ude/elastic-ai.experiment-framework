@@ -152,7 +152,7 @@ void transport_poll(Transport *transport)
     // already handled by thread here
 }
 
-uint64_t transport_get_current_time()
+uint64_t transport_get_current_time_ms()
 {
     time_t current_time;
     time(&current_time);

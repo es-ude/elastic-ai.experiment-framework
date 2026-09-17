@@ -417,3 +417,16 @@ void get_flash_ones(TaskContext *task_context)
     task_context->task_services.send_data(&task_context->task_services, 0, (uint8_t *)&ones, 4, false);
     task_context->task_services.send_return(&task_context->task_services, 0, 0, false);
 }
+
+void periodic_task(TaskContext *task_context)
+{
+    task_context->step_counter++;
+    task_context->exe_interval_ms = 1000;
+    const char *msg = task_context->input_data;
+    uint32_t msg_len = task_context->input_data_len;
+    task_context->task_services.send_data(&task_context->task_services, 0, (uint8_t *)msg, msg_len, false);
+    if (task_context->step_counter >= 5) // still needs to be closed from remote, only sends return
+    {
+        task_context->task_services.send_return(&task_context->task_services, 0, 0, false);
+    }
+}

@@ -123,7 +123,7 @@ bool add_to_unacked(Sender *tx, Frame *frame)
             tracker->used = 1;
             tracker->seq = frame->header.msg_id;
             tracker->frame = *frame;
-            tracker->last_sent_ms = transport_get_current_time();
+            tracker->last_sent_ms = transport_get_current_time_ms();
             tracker->retry_count = 0;
             tracker->state = STATE_SENT;
             return true;
@@ -163,7 +163,7 @@ void on_nack(Sender *tx, uint8_t nacked_msg_id)
     }
 }
 
-void retransmit_unacked(Sender *tx, uint32_t current_time_s)
+void retransmit_unacked(Sender *tx, uint32_t current_time_ms)
 {
     for (int i = 0; i < UNACKED_MSG_MAX_AMOUNT; i++)
     {
@@ -175,16 +175,16 @@ void retransmit_unacked(Sender *tx, uint32_t current_time_s)
         if (tracker->state != STATE_SENT)
             continue;
 
-        // printf("Retransmit check for msg_id %d, last_sent_ms: %d, current_time_ms: %d, retry_count: %d\n", tracker->seq, tracker->last_sent_ms, current_time_s, tracker->retry_count);
+        // printf("Retransmit check for msg_id %d, last_sent_ms: %d, current_time_ms: %d, retry_count: %d\n", tracker->seq, tracker->last_sent_ms, current_time_ms, tracker->retry_count);
 
-        if ((current_time_s - tracker->last_sent_ms) >= ACK_TIMEOUT_S)
+        if ((current_time_ms - tracker->last_sent_ms) >= ACK_TIMEOUT_MS)
         {
             // printf("Retransmitting unacked message with msg_id %d, retry_count: %d\n", tracker->seq, tracker->retry_count);
 
             if (tracker->retry_count < MAX_RETRY_COUNT)
             {
                 tracker->retry_count++;
-                tracker->last_sent_ms = current_time_s;
+                tracker->last_sent_ms = current_time_ms;
 
                 OutgoingOrder order = {
                     .frame = tracker->frame,
@@ -203,7 +203,8 @@ void retransmit_unacked(Sender *tx, uint32_t current_time_s)
 
 void process_tx(Sender *tx)
 {
-    retransmit_unacked(tx, transport_get_current_time());
+
+    retransmit_unacked(tx, transport_get_current_time_ms());
 
     if (tx->state == TX_IDLE)
     {

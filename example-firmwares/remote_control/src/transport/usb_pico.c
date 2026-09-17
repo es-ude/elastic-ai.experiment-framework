@@ -97,7 +97,7 @@ void transport_poll(Transport *transport)
     usb_poll_rx(transport);
 }
 
-uint64_t transport_get_current_time()
+uint64_t transport_get_current_time_ms()
 {
-    return to_ms_since_boot(get_absolute_time()) / 1000;
+    return to_ms_since_boot(get_absolute_time());
 }

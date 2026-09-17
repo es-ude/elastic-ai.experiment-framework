@@ -57,8 +57,11 @@ TaskDefinition task_definition_table[] = {
     {.setup = setup_start_timer,
      .handle = timer_write_to_flash_from_remote,
      .tear_down = default_teardown},
-    {.setup = setup_start_timer,
+    {.setup = setup_start_timer, // 15
      .handle = timer_predict,
+     .tear_down = default_teardown},
+    {.setup = default_setup,
+     .handle = periodic_task,
      .tear_down = default_teardown},
 
 #endif

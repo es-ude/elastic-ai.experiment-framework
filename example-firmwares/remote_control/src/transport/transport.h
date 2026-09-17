@@ -51,4 +51,4 @@ struct Transport
 
 void transport_init(Transport *buf, TransportConfig cfg);
 void transport_poll(Transport *transport);
-uint64_t transport_get_current_time();
+uint64_t transport_get_current_time_ms();
