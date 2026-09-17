@@ -47,6 +47,9 @@ TaskDefinition task_definition_table[] = {
      .tear_down = default_teardown},
     {.setup = default_setup,
      .handle = get_flash_ones,
+     .tear_down = default_teardown},
+    {.setup = default_setup,
+     .handle = periodic_task,
      .tear_down = default_teardown}
 #endif
 };
