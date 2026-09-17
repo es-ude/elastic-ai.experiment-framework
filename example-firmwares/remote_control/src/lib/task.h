@@ -38,6 +38,9 @@ typedef struct
 
     uint16_t step_counter;
 
+    uint64_t exe_interval_ms;
+    uint64_t exe_last_ms;
+
     /* --- function execution --- */
     uint8_t input_data[TASK_BUFFER_LEN_BYTE];
     uint32_t input_data_len;

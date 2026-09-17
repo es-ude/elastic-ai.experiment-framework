@@ -287,3 +287,15 @@ void get_flash_ones(TaskContext *task_context)
     task_context->task_services.send_data(&task_context->task_services, 0, (uint8_t *)&ones, 4, false);
     task_context->task_services.send_return(&task_context->task_services, 0, 0, false);
 }
+
+void periodic_task(TaskContext *task_context)
+{
+    // This is a periodic task that runs every 1000 ms
+    // It can be used to perform any periodic operations needed by the system
+    // For example, it could check the status of the FPGA or perform maintenance tasks
+
+    // Here we just send a message indicating that the periodic task has run
+    const char *msg = "periodic_task_executed";
+    task_context->task_services.send_data(&task_context->task_services, 0, (uint8_t *)msg, strlen(msg), false);
+    task_context->task_services.send_return(&task_context->task_services, 0, 0, false);
+}

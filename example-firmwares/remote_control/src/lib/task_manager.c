@@ -3,6 +3,7 @@
 #include "sender.h"
 #include "msg_types.h"
 #include "log.h"
+#include "transport.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -171,7 +172,7 @@ void process_tasks(RingBuffer *task_rb, RingBuffer *outgoing_rb, TaskManager *ta
 {
     Task *task;
 
-    while (ringbuffer_pop(task_rb, &task))
+    while (ringbuffer_pop(task_rb, &task)) // Check externally queued tasks
     {
         if (task->funcs == NULL || task->funcs->handle == NULL)
         {
@@ -179,5 +180,19 @@ void process_tasks(RingBuffer *task_rb, RingBuffer *outgoing_rb, TaskManager *ta
             return;
         }
         task->funcs->handle(&task->ctx);
+    }
+
+    for (int i = 0; i < MAX_TASKS; i++) // Check internally queued tasks with timer
+    {
+        task = &task_manager->task_pool[i];
+        if (task->status == TASK_STATUS_RUNNING && task->ctx.exe_interval_ms > 0)
+        {
+            uint64_t current_time = transport_get_current_time();
+            if (current_time - task->ctx.exe_last_ms >= task->ctx.exe_interval_ms)
+            {
+                task->ctx.exe_last_ms = current_time;
+                task->funcs->handle(&task->ctx);
+            }
+        }
     }
 }
