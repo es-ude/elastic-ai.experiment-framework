@@ -61,6 +61,11 @@ TaskDefinition task_definition_table[] = {
      .handle = timer_predict,
      .tear_down = default_teardown},
 
+     // performance measurmement --python
+     {.setup = default_setup,
+     .tear_down = default_teardown,
+     .handle = replay_data_without_stopping},
+
 #endif
 };
 

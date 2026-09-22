@@ -10,7 +10,7 @@
 typedef struct Task Task;
 typedef struct TaskServices TaskServices;
 
-#define TASK_BUFFER_LEN_BYTE 1024
+#define TASK_BUFFER_LEN_BYTE 2048
 #define MAX_TASKS 32
 
 typedef enum
