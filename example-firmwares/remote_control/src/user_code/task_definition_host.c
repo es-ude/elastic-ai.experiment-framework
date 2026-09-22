@@ -24,6 +24,25 @@ void send_mirror_reply(TaskContext *task_context)
     task_context->task_services.send_return(&task_context->task_services, 0, 0, false);
 }
 
+void replay_data_without_stopping(TaskContext *task_context)
+{
+    LOG("send_mirror_reply called\n");
+    memcpy(task_context->output_data, task_context->input_data, task_context->input_data_len);
+    task_context->output_data_len = task_context->input_data_len;
+
+    LOG("Output data len: %d\n", task_context->output_data_len);
+    LOG("Preparing response frame with payload\n");
+
+    task_context->task_services.send_data(&task_context->task_services, 0, task_context->output_data, task_context->output_data_len, false);
+
+    LOG("task 1 %p", (void *)task_context);
+    LOG("Preparing response frame with payload onto ringbuffer %p\n", (void *)task_context->task_services.outgoing_rb);
+
+    LOG("Prepared return frame\n");
+
+}
+
+
 void func1(TaskContext *task_context)
 {
     LOG("Function 1 executed\n");

@@ -95,9 +95,10 @@ bool init_task(Task *task, Frame *frame, TaskManager *task_manager)
 // @return @param bool if further Datachunks are expected
 bool send_frame_to_task(RingBuffer *task_rb, Task *task, Frame *frame)
 {
-    memcpy(&task->ctx.input_data[task->ctx.input_data_len], frame->payload, frame->header.payload_len);
+    //memcpy(&task->ctx.input_data[task->ctx.input_data_len], frame->payload, frame->header.payload_len);
+    memcpy(&task->ctx.input_data, frame->payload, frame->header.payload_len);
 
-    task->ctx.input_data_len += frame->header.payload_len;
+    task->ctx.input_data_len = frame->header.payload_len;
 
     if (task->funcs == NULL || task->funcs->handle == NULL)
     {
