@@ -8,14 +8,10 @@
 void send_mirror_reply(TaskContext *task_context)
 {
     LOG("send_mirror_reply called\n");
-    memcpy(task_context->output_data, task_context->input_data, task_context->input_data_len);
-    task_context->output_data_len = task_context->input_data_len;
-
-    LOG("Output data len: %d\n", task_context->output_data_len);
     LOG("Preparing response frame with payload\n");
 
-    task_context->task_services.send_data(&task_context->task_services, 0, task_context->output_data, task_context->output_data_len, false);
-
+    task_context->task_services.send_data(&task_context->task_services, 0, task_context->input_data, task_context->input_data_len, false);
+    task_context->input_data_len = 0;
     LOG("task 1 %p", (void *)task_context);
     LOG("Preparing response frame with payload onto ringbuffer %p\n", (void *)task_context->task_services.outgoing_rb);
 

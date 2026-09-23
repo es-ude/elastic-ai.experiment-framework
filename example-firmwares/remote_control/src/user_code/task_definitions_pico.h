@@ -16,3 +16,5 @@ void write_to_flash_from_remote(TaskContext *task_context);
 void read_skeleton_id(TaskContext *task_context);
 void predict(TaskContext *task_context);
 void get_flash_ones(TaskContext *task_context);
+
+void compute_sensor_data(TaskContext *task_context);

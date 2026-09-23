@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 
 #define USER_LOGIC_START_ADDRESS 18
 #define COMPUTE_BYTE 16
@@ -106,6 +107,10 @@ uint32_t count_flash_ones(TaskContext *task_context, uint32_t length)
     return ones;
 }
 
+typedef struct
+{
+    uint8_t frames[3][9];
+} AverageFramesStruct;
 // ---------------------------------------------------------------
 
 void fast_setup_hardware_init(TaskContext *task_context)
@@ -304,4 +309,33 @@ void get_flash_ones(TaskContext *task_context)
 
     task_context->task_services.send_data(&task_context->task_services, 0, (uint8_t *)&ones, 4, false);
     task_context->task_services.send_return(&task_context->task_services, 0, 0, false);
+}
+
+void compute_sensor_data(TaskContext *task_context)
+{
+    if (task_context->step_counter == 0 && task_context->user_data == NULL)
+    {
+        task_context->user_data = malloc(sizeof(AverageFramesStruct));
+    }
+    AverageFramesStruct *frames = (AverageFramesStruct *)task_context->user_data;
+
+    memcpy(frames->frames[task_context->step_counter % 3], task_context->input_data, 9);
+    task_context->input_data_len = 0;
+
+    if (task_context->step_counter >= 2)
+    {
+        uint8_t average_frame[9] = {0};
+        for (size_t i = 0; i < 9; i++)
+        {
+            uint16_t sum = 0;
+            for (size_t j = 0; j < 3; j++)
+            {
+                sum += frames->frames[j][i];
+            }
+            average_frame[i] = sum / 3;
+        }
+        task_context->task_services.send_data(&task_context->task_services, 0, average_frame, 9, false);
+    }
+
+    task_context->step_counter++;
 }

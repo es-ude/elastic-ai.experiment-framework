@@ -42,12 +42,14 @@ TaskDefinition task_definition_table[] = {
     {.setup = default_setup,
      .handle = write_to_flash,
      .tear_down = default_teardown},
-    {.setup = default_setup,
+    {.setup = default_setup, // 10
      .handle = erase_fpga_flash,
      .tear_down = default_teardown},
+    
     {.setup = default_setup,
-     .handle = get_flash_ones,
+     .handle = compute_sensor_data,
      .tear_down = default_teardown}
+
 #endif
 };
 

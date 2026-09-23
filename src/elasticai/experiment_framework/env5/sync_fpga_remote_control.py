@@ -1,4 +1,6 @@
+import atexit
 import logging
+import readline
 import shlex
 import time
 from pathlib import Path
@@ -23,6 +25,8 @@ BYTE_STREAM_PATH = Path("tests/fpga/env5_top_reconfig.bin")
 SPECS: set[_DeviceSpec] = {
     _DeviceSpec(10, 11914, "env5"),
 }
+HISTORY_FILE = Path.home() / ".local" / "state" / "eaixp" / "fpga-history"
+
 
 logger = logging.getLogger(__name__)
 
@@ -72,20 +76,20 @@ class SyncFPGARemoteControl(SyncRemoteControl):
         self._run_task(task)
         result = task.result[-16:]
         return result.hex()
-    
+
     def clear_flash(
-            self,
-            need_ack: bool = False,
-            has_crc: bool = False,
-        ):
-            task = SimpleTask(
-                TaskDefinitionIds.FPGA_CLEAR_FLASH,
-                data=b"a",
-                need_ack=need_ack,
-                has_crc=has_crc,
-            )
-    
-            self._run_task(task)
+        self,
+        need_ack: bool = False,
+        has_crc: bool = False,
+    ):
+        task = SimpleTask(
+            TaskDefinitionIds.FPGA_CLEAR_FLASH,
+            data=b"a",
+            need_ack=need_ack,
+            has_crc=has_crc,
+        )
+
+        self._run_task(task)
 
     def predict(
         self,
@@ -166,12 +170,31 @@ def fpga_shell_command(port, debug, show_raw):
             run_fpga_shell(control)
 
 
+def setup_readline() -> None:
+
+    readline.parse_and_bind("set editing-mode emacs")
+    readline.parse_and_bind('"\\e[A": previous-history')
+    readline.parse_and_bind('"\\e[B": next-history')
+
+    readline.set_history_length(1000)
+
+    HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        readline.read_history_file(HISTORY_FILE)
+    except FileNotFoundError:
+        pass
+
+    atexit.register(readline.write_history_file, HISTORY_FILE)
+
+
 def run_fpga_shell(control):
+    setup_readline()
     click.echo("FPGA interactive shell. Type 'exit' to quit.")
 
     while True:
         try:
-            line = click.prompt("fpga", prompt_suffix="> ")
+            line = input("fpga>")
         except (EOFError, KeyboardInterrupt):
             break
 
@@ -228,7 +251,6 @@ def power_on(control, need_ack, has_crc):
         need_ack=need_ack,
         has_crc=has_crc,
     )
-
 
 
 @fpga.command("clear-flash")
