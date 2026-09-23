@@ -42,6 +42,10 @@ void default_setup(TaskContext *task_context)
     LOG("Task %i was setup\n", task_context->task_services.task_id);
 }
 
+void default_handle(TaskContext *task_context)
+{
+}
+
 void fast_setup_ack_from_pc(TaskContext *task_context)
 {
     request_ack_from_pc(task_context);

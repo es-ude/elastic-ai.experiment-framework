@@ -43,7 +43,9 @@ int msg_open_task(Frame *frame, TaskManager *task_manager)
 
 int msg_close_task(Frame *frame, TaskManager *task_manager)
 {
+
     Task *task = get_task_by_id(frame->header.transaction_id, task_manager);
+
     if (task == NULL || task->status == TASK_STATUS_IDLE)
     {
         LOG("Invalid task ID in close task: %d\n", frame->header.transaction_id);
@@ -104,6 +106,7 @@ void send_ack(Frame *frame, Sender *tx, enum AckType ack_type, uint8_t nack_code
 
 void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_manager, Sender *tx)
 {
+
     int associated_transaction_id = 0;
     enum AckType ack_type = SEND_ACK;
     uint8_t nack_code = 0;
@@ -142,6 +145,11 @@ void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_
     {
     case OPEN_TASK:
         LOG("[Server] Handling OPEN_TASK message.\n");
+
+        LOG("[Server] OPEN_TASK result=%d, transaction=%u, task_def=%u\n",
+            associated_transaction_id,
+            frame->header.transaction_id,
+            frame->payload[0]);
 
         associated_transaction_id = msg_open_task(frame, task_manager);
 
