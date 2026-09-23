@@ -23,7 +23,7 @@ void print_payload(uint8_t *payload, uint8_t payload_len)
     LOG("\n\n");
 }
 
-int msg_open_task(Frame *frame, TaskManager *task_manager)
+int msg_open_task(Frame *frame, TaskManager *task_manager, uint64_t *timer)
 {
     Task *task = get_task_by_id(frame->header.transaction_id, task_manager);
     if (task == NULL || task->status != TASK_STATUS_IDLE)
@@ -32,6 +32,7 @@ int msg_open_task(Frame *frame, TaskManager *task_manager)
         return -1;
     }
 
+    task->ctx.timer_since_arrival_us = *timer;
     bool task_created = init_task(task, frame, task_manager);
     if (!task_created)
     {
@@ -60,7 +61,7 @@ int msg_return(Frame *frame)
 }
 
 // Handle incoming data chunk for a task. This will append the new chunk to the existing input data for the task
-int msg_data_chunk(RingBuffer *task_rb, Frame *frame, TaskManager *task_manager)
+int msg_data_chunk(RingBuffer *task_rb, Frame *frame, TaskManager *task_manager, uint64_t *timer)
 {
     LOG("[Server] Handle incoming data chunk\n");
     Task *task = get_task_by_id(frame->header.transaction_id, task_manager); // Get the task ID from the first byte of the payload to identify which task this data chunk belongs to
@@ -70,7 +71,7 @@ int msg_data_chunk(RingBuffer *task_rb, Frame *frame, TaskManager *task_manager)
         return -1;
     }
     LOG("[Server] Fetched Task with id %i\n", frame->header.transaction_id);
-
+    task->ctx.timer_since_arrival_us = *timer;
     send_frame_to_task(task_rb, task, frame);
     return task->id;
 }
@@ -102,7 +103,7 @@ void send_ack(Frame *frame, Sender *tx, enum AckType ack_type, uint8_t nack_code
     ringbuffer_push(tx->outgoing_rb, &order);
 }
 
-void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_manager, Sender *tx)
+void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_manager, Sender *tx, uint64_t *timer)
 {
     int associated_transaction_id = 0;
     enum AckType ack_type = SEND_ACK;
@@ -143,7 +144,7 @@ void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_
     case OPEN_TASK:
         LOG("[Server] Handling OPEN_TASK message.\n");
 
-        associated_transaction_id = msg_open_task(frame, task_manager);
+        associated_transaction_id = msg_open_task(frame, task_manager, timer);
 
         tx->msg_counter[frame->header.transaction_id] = 0; // reset msg_id of outgoing messages. 0 is open task, 1 is following
         if (associated_transaction_id < 0)
@@ -182,7 +183,7 @@ void handle_incoming_frame(RingBuffer *task_rb, Frame *frame, TaskManager *task_
         break;
     case DATA_CHUNK:
         LOG("[Server] Handling DATA_CHUNK message\n");
-        associated_transaction_id = msg_data_chunk(task_rb, frame, task_manager);
+        associated_transaction_id = msg_data_chunk(task_rb, frame, task_manager, timer);
 
         if (associated_transaction_id < 0)
         {

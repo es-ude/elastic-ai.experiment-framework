@@ -48,6 +48,7 @@ typedef struct
     uint32_t output_data_len;
 
     void *user_data;
+    uint64_t timer_since_arrival_us;
 } TaskContext;
 
 typedef void (*Func)(TaskContext *task_context);
