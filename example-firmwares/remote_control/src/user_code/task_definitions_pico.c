@@ -13,7 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-
+#include <string.h>
 #define USER_LOGIC_START_ADDRESS 18
 #define COMPUTE_BYTE 16
 
@@ -416,4 +416,653 @@ void get_flash_ones(TaskContext *task_context)
 
     task_context->task_services.send_data(&task_context->task_services, 0, (uint8_t *)&ones, 4, false);
     task_context->task_services.send_return(&task_context->task_services, 0, 0, false);
+}
+
+/* ============================================================
+ * FPGA POWER ON
+ * ============================================================ */
+
+void fpga_power_on_core(Fpga *fpga)
+{
+    Fpga_powerOn(fpga);
+}
+
+/*
+ * Normal remote task.
+ *
+ * No local timing is performed here.
+ */
+void p_fpga_power_on(TaskContext *task_context)
+{
+    Fpga *fpga = Config_getFpga();
+
+    fpga_power_on_core(fpga);
+
+    task_context->task_services.send_return(
+        &task_context->task_services,
+        0,
+        0,
+        false);
+}
+
+/*
+ * Direct benchmark.
+ *
+ * Only the FPGA power-on operation is timed.
+ * Protocol communication happens after the timer has stopped.
+ */
+void benchmark_fpga_power_on(TaskContext *task_context)
+{
+    Fpga *fpga = Config_getFpga();
+
+    uint64_t start = time_us_64();
+
+    fpga_power_on_core(fpga);
+
+    uint64_t elapsed = time_us_64() - start;
+
+    /* data_id = 0 -> execution time */
+    task_context->task_services.send_data(
+        &task_context->task_services,
+        0,
+        (uint8_t *)&elapsed,
+        sizeof(elapsed),
+        false);
+
+    task_context->task_services.send_return(
+        &task_context->task_services,
+        0,
+        0,
+        false);
+}
+
+/* ============================================================
+ * ECHO
+ * ============================================================ */
+
+void echo_core(
+    const uint8_t *input,
+    uint16_t input_len,
+    uint8_t *output)
+{
+    memcpy(output, input, input_len);
+}
+
+/*
+ * Normal remote task.
+ *
+ * Receives the input through the task context and returns
+ * the echoed data.
+ */
+void p_echo(TaskContext *task_context)
+{
+    echo_core(
+        task_context->input_data,
+        task_context->input_data_len,
+        task_context->output_data);
+
+    task_context->output_data_len =
+        task_context->input_data_len;
+
+    /* data_id = 0 -> echo result */
+    task_context->task_services.send_data(
+        &task_context->task_services,
+        0,
+        task_context->output_data,
+        task_context->output_data_len,
+        false);
+
+    task_context->task_services.send_return(
+        &task_context->task_services,
+        0,
+        0,
+        false);
+}
+
+/*
+ * Direct benchmark.
+ *
+ * The memcpy operation itself is timed.
+ * Sending the timing result and echo result happens afterwards.
+ */
+void benchmark_echo(TaskContext *task_context)
+{
+    uint8_t input[256];
+    uint8_t output[256];
+
+    memset(input, 0, sizeof(input));
+
+    uint64_t start = time_us_64();
+
+    echo_core(
+        input,
+        sizeof(input),
+        output);
+
+    uint64_t elapsed = time_us_64() - start;
+
+    /* data_id = 0 -> execution time */
+    task_context->task_services.send_data(
+        &task_context->task_services,
+        0,
+        (uint8_t *)&elapsed,
+        sizeof(elapsed),
+        false);
+
+    /* data_id = 1 -> echo result */
+    task_context->task_services.send_data(
+        &task_context->task_services,
+        1,
+        output,
+        sizeof(output),
+        false);
+
+    task_context->task_services.send_return(
+        &task_context->task_services,
+        0,
+        0,
+        false);
+}
+
+/* ============================================================
+ * PREDICT
+ * ============================================================ */
+
+void predict_core(
+    Fpga *fpga,
+    FpgaMiddleware *fpga_middleware,
+    const uint8_t *input,
+    uint8_t input_len,
+    uint8_t *output,
+    uint8_t *output_len)
+{
+    (void)input_len;
+
+    if (!Fpga_isPoweredOn(fpga))
+    {
+        Fpga_powerOn(fpga);
+
+        while (!Fpga_isPoweredOn(fpga))
+        {
+            sleep_ms(1);
+        }
+    }
+
+    FpgaMiddleware_init(fpga_middleware);
+    FpgaMiddleware_enableUserLogic(fpga_middleware);
+
+    uint8_t result_size = input[0];
+    uint8_t model_inference_input = input[1];
+
+    FpgaMiddleware_write(
+        fpga_middleware,
+        &model_inference_input,
+        USER_LOGIC_START_ADDRESS,
+        1);
+
+    startCompute();
+
+    while (FpgaMiddleware_fpgaIsBusy(fpga_middleware))
+    {
+    }
+
+    stopCompute();
+
+    FpgaMiddleware_read(
+        fpga_middleware,
+        output,
+        USER_LOGIC_START_ADDRESS,
+        result_size);
+
+    *output_len = result_size;
+
+    FpgaMiddleware_disableUserLogic(fpga_middleware);
+    FpgaMiddleware_deinit(fpga_middleware);
+}
+
+/*
+ * Normal remote task.
+ *
+ * No local timing is performed here.
+ */
+void p_predict(TaskContext *task_context)
+{
+    Fpga *fpga = Config_getFpga();
+
+    FpgaMiddleware *fpga_middleware =
+        Config_getFpgaMiddleware();
+
+    uint8_t output_len;
+
+    predict_core(
+        fpga,
+        fpga_middleware,
+        task_context->input_data,
+        task_context->input_data_len,
+        task_context->output_data,
+        &output_len);
+
+    task_context->output_data_len = output_len;
+
+    /* data_id = 0 -> prediction result */
+    task_context->task_services.send_data(
+        &task_context->task_services,
+        0,
+        task_context->output_data,
+        task_context->output_data_len,
+        false);
+
+    task_context->task_services.send_return(
+        &task_context->task_services,
+        0,
+        0,
+        false);
+}
+
+/*
+ * Direct benchmark.
+ *
+ * The complete predict_core() execution is timed.
+ * Protocol communication happens after the timer has stopped.
+ */
+void benchmark_predict(TaskContext *task_context)
+{
+    Fpga *fpga = Config_getFpga();
+
+    FpgaMiddleware *fpga_middleware =
+        Config_getFpgaMiddleware();
+
+    uint8_t output[16];
+    uint8_t output_len;
+
+    /*
+     * Use exactly the input received through the DATA_CHUNK.
+     *
+     * input[0] = result size
+     * input[1] = model inference input
+     */
+    if (task_context->input_data_len != 2)
+    {
+        task_context->task_services.send_return(
+            &task_context->task_services,
+            1,
+            0,
+            false);
+        return;
+    }
+
+    uint64_t start = time_us_64();
+
+    predict_core(
+        fpga,
+        fpga_middleware,
+        task_context->input_data,
+        task_context->input_data_len,
+        output,
+        &output_len);
+
+    uint64_t elapsed = time_us_64() - start;
+
+    /* data_id = 0 -> execution time */
+    task_context->task_services.send_data(
+        &task_context->task_services,
+        0,
+        (uint8_t *)&elapsed,
+        sizeof(elapsed),
+        false);
+
+    /* data_id = 1 -> prediction result */
+    task_context->task_services.send_data(
+        &task_context->task_services,
+        1,
+        output,
+        output_len,
+        false);
+
+    task_context->task_services.send_return(
+        &task_context->task_services,
+        0,
+        0,
+        false);
+}
+
+extern const uint8_t _binary_env5_top_reconfig_bin_start[];
+extern const uint8_t _binary_env5_top_reconfig_bin_end[];
+
+/* ============================================================
+ * FLASH WRITE
+ * ============================================================ */
+
+void flash_write_begin_core(
+    uint8_t target_sector,
+    uint16_t input_len)
+{
+    (void)target_sector;
+
+    Fpga *fpga = Config_getFpga();
+
+    if (Fpga_isPoweredOn(fpga))
+    {
+        Fpga_powerOff(fpga);
+    }
+
+    eraseFlash(
+        &flashConfig,
+        0,
+        input_len);
+}
+
+uint16_t flash_write_page_core(
+    uint8_t target_sector,
+    uint32_t page_index,
+    const uint8_t *data)
+{
+    uint32_t address =
+        page_index * flashConfig.bytesPerPage + target_sector * flashConfig.bytesPerSector;
+
+    return flashWritePage(
+        &flashConfig,
+        address,
+        (uint8_t *)data,
+        flashConfig.bytesPerPage);
+}
+
+void p_write_to_flash_from_remote(TaskContext *task_context)
+{
+    if (
+        task_context->step_counter > 0 &&
+        task_context->input_data_len < flashConfig.bytesPerPage)
+    {
+        UserDataStruct *user_data =
+            (UserDataStruct *)task_context->user_data;
+
+        task_context->task_services.send_data(
+            &task_context->task_services,
+            0,
+            (uint8_t *)&user_data->written_bytes,
+            sizeof(user_data->written_bytes),
+            false);
+
+        task_context->task_services.send_return(
+            &task_context->task_services,
+            0,
+            0,
+            false);
+
+        return;
+    }
+
+    if (task_context->step_counter == 0)
+    {
+        task_context->user_data =
+            malloc(sizeof(UserDataStruct));
+
+        if (task_context->user_data == NULL)
+        {
+            task_context->task_services.send_return(
+                &task_context->task_services,
+                1,
+                0,
+                false);
+
+            return;
+        }
+
+        UserDataStruct *user_data =
+            (UserDataStruct *)task_context->user_data;
+
+        user_data->written_bytes = 0;
+        user_data->target_sector =
+            task_context->input_data[0];
+
+        flash_write_begin_core(
+            user_data->target_sector,
+            task_context->input_data_len);
+    }
+    else
+    {
+        UserDataStruct *user_data =
+            (UserDataStruct *)task_context->user_data;
+
+        uint16_t written_bytes =
+            flash_write_page_core(
+                user_data->target_sector,
+                task_context->step_counter - 1,
+                task_context->input_data);
+
+        user_data->written_bytes += written_bytes;
+    }
+
+    task_context->input_data_len = 0;
+    task_context->step_counter++;
+}
+
+void benchmark_flash_write(TaskContext *task_context)
+{
+    if (task_context->input_data_len != 1)
+    {
+        task_context->task_services.send_return(
+            &task_context->task_services,
+            1,
+            0,
+            false
+        );
+        return;
+    }
+
+    if (flashConfig.spiConfiguration->spiInstance == NULL)
+    {
+        init_hardware();
+    }
+
+    uint8_t target_sector = task_context->input_data[0];
+
+    const uint8_t *bitstream =
+        _binary_env5_top_reconfig_bin_start;
+
+    uint32_t size =
+        (uint32_t)(
+            _binary_env5_top_reconfig_bin_end
+            - _binary_env5_top_reconfig_bin_start
+        );
+
+    Fpga *fpga = Config_getFpga();
+
+    if (Fpga_isPoweredOn(fpga))
+    {
+        Fpga_powerOff(fpga);
+    }
+
+    uint64_t start = time_us_64();
+
+    eraseFlash(&flashConfig, 0, 550000);
+    
+    uint32_t written = 0;
+    uint32_t page_size = flashConfig.bytesPerPage;
+    uint32_t base_address =
+        target_sector * flashConfig.bytesPerSector;
+
+    while (written + page_size <= size)
+    {
+        uint32_t result = flashWritePage(
+            &flashConfig,
+            base_address + written,
+            (uint8_t *)&bitstream[written],
+            page_size
+        );
+
+        if (result != page_size)
+        {
+            uint64_t elapsed = time_us_64() - start;
+
+            task_context->task_services.send_data(
+                &task_context->task_services,
+                0,
+                (uint8_t *)&elapsed,
+                sizeof(elapsed),
+                false
+            );
+
+            task_context->task_services.send_data(
+                &task_context->task_services,
+                1,
+                (uint8_t *)&written,
+                sizeof(written),
+                false
+            );
+
+            task_context->task_services.send_return(
+                &task_context->task_services,
+                1,
+                0,
+                false
+            );
+            return;
+        }
+
+        written += page_size;
+    }
+
+    uint64_t elapsed = time_us_64() - start;
+
+    task_context->task_services.send_data(
+        &task_context->task_services,
+        0,
+        (uint8_t *)&elapsed,
+        sizeof(elapsed),
+        false
+    );
+
+    task_context->task_services.send_data(
+        &task_context->task_services,
+        1,
+        (uint8_t *)&written,
+        sizeof(written),
+        false
+    );
+
+    task_context->task_services.send_return(
+        &task_context->task_services,
+        0,
+        0,
+        false
+    );
+}
+/* ============================================================
+ * SKELETON / MODEL ID
+ * ============================================================ */
+
+#define ADDR_MODEL_ID 0
+#define BYTES_MODEL_ID 16
+
+void read_skeleton_id_core(
+    uint8_t *skeleton_id)
+{
+    if (flashConfig.spiConfiguration->spiInstance == NULL)
+    {
+        init_hardware();
+    }
+
+    Fpga *fpga = Config_getFpga();
+
+    if (!Fpga_isPoweredOn(fpga))
+    {
+        Fpga_powerOn(fpga);
+
+        sleep_ms(100);
+    }
+
+    FpgaMiddleware *fpga_middleware =
+        Config_getFpgaMiddleware();
+
+    FpgaMiddleware_init(fpga_middleware);
+
+    FpgaMiddleware_enableUserLogic(
+        fpga_middleware);
+
+    FpgaMiddleware_read(
+        fpga_middleware,
+        skeleton_id,
+        ADDR_MODEL_ID,
+        BYTES_MODEL_ID);
+
+    FpgaMiddleware_disableUserLogic(
+        fpga_middleware);
+
+    FpgaMiddleware_deinit(
+        fpga_middleware);
+}
+
+/*
+ * Normal remote task.
+ *
+ * No local timing is performed here.
+ */
+void p_read_skeleton_id(TaskContext *task_context)
+{
+    uint8_t skeleton_id[BYTES_MODEL_ID] = {0};
+
+    read_skeleton_id_core(
+        skeleton_id);
+
+    /*
+     * data_id = 0 -> skeleton ID
+     */
+    task_context->task_services.send_data(
+        &task_context->task_services,
+        0,
+        skeleton_id,
+        BYTES_MODEL_ID,
+        false);
+
+    task_context->task_services.send_return(
+        &task_context->task_services,
+        0,
+        0,
+        false);
+}
+
+/*
+ * Direct benchmark.
+ *
+ * The complete read_skeleton_id_core() execution is timed.
+ * Protocol communication happens after the timer has stopped.
+ */
+void benchmark_read_skeleton_id(TaskContext *task_context)
+{
+    uint8_t skeleton_id[BYTES_MODEL_ID] = {0};
+
+    uint64_t start = time_us_64();
+
+    read_skeleton_id_core(
+        skeleton_id);
+
+    uint64_t elapsed =
+        time_us_64() - start;
+
+    /*
+     * data_id = 0 -> execution time
+     */
+    task_context->task_services.send_data(
+        &task_context->task_services,
+        0,
+        (uint8_t *)&elapsed,
+        sizeof(elapsed),
+        false);
+
+    /*
+     * data_id = 1 -> skeleton ID
+     */
+    task_context->task_services.send_data(
+        &task_context->task_services,
+        1,
+        skeleton_id,
+        BYTES_MODEL_ID,
+        false);
+
+    task_context->task_services.send_return(
+        &task_context->task_services,
+        0,
+        0,
+        false);
 }

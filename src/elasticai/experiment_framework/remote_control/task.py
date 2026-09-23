@@ -55,7 +55,7 @@ class Task(ABC):
 
         return await asyncio.wait_for(
             asyncio.shield(self._completion),
-            timeout=timeout,
+            timeout=self.timeout,
         )
 
     async def on_opened(self) -> AsyncGenerator[CallbackAction, None]:

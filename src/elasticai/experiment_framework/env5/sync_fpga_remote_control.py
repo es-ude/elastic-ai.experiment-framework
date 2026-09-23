@@ -72,12 +72,13 @@ class SyncFPGARemoteControl(SyncRemoteControl):
             bitstream = f.read()
 
         task = FPGAWriteToFlashTask(
-            task_def_id=TaskDefinitionIds.FPGA_WRITE_TO_FLASH if not timer else TaskDefinitionIds.FPGA_WRITE_TO_FLASH_TIMER,
+            task_def_id= (TaskDefinitionIds.FPGA_WRITE_TO_FLASH_TIMER if timer else TaskDefinitionIds.FPGA_WRITE_TO_FLASH),
             sector=flash_sector,
             data=bitstream,
             chunk_size=self._chunk_size,
-            need_ack=need_ack,
-            need_checksum=need_checksum,
+            need_ack = need_ack,
+            need_checksum = need_checksum
         )
 
         self._run_task(task)
+

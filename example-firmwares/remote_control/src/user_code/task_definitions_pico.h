@@ -22,3 +22,24 @@ void write_to_flash_from_remote(TaskContext *task_context);
 void read_skeletion_id(TaskContext *task_context);
 void predict(TaskContext *task_context);
 void get_flash_ones(TaskContext *task_context);
+
+
+void p_fpga_power_on(TaskContext *task_context);
+
+void p_echo(TaskContext *task_context);
+
+void p_predict(TaskContext *task_context);
+
+void p_write_to_flash_from_remote(TaskContext *task_context);
+
+void p_read_skeleton_id(TaskContext *task_context);
+
+void benchmark_fpga_power_on(TaskContext *task_context);
+
+void benchmark_echo(TaskContext *task_context);
+
+void benchmark_predict(TaskContext *task_context);
+
+void benchmark_flash_write(TaskContext *task_context);
+
+void benchmark_read_skeleton_id(TaskContext *task_context);

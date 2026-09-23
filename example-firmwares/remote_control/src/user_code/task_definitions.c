@@ -61,6 +61,42 @@ TaskDefinition task_definition_table[] = {
      .handle = timer_predict,
      .tear_down = default_teardown},
 
+
+        // remote functions
+    {.setup = p_fpga_power_on, // 16
+     .handle = default_handle,
+     .tear_down = default_teardown},
+    {.setup = default_setup, // 17
+     .handle = p_echo,
+     .tear_down = default_teardown},
+    {.setup = default_setup, // 18
+     .handle = p_predict,
+     .tear_down = default_teardown},
+    {.setup = default_setup, // 19
+     .handle = p_write_to_flash_from_remote,
+     .tear_down = default_teardown},
+    {.setup = p_read_skeleton_id, // 20
+     .handle = default_handle,
+     .tear_down = default_teardown},
+
+    // overhead benchmarks
+    {.setup = benchmark_fpga_power_on, // 21
+     .handle = default_handle,
+     .tear_down = default_teardown},
+    {.setup = default_setup, // 22
+     .handle = benchmark_echo,
+     .tear_down = default_teardown},
+    {.setup = default_setup, // 23
+     .handle = benchmark_predict,
+     .tear_down = default_teardown},
+    {.setup = default_setup, // 24
+     .handle = benchmark_flash_write,
+     .tear_down = default_teardown},
+    {.setup = benchmark_read_skeleton_id, // 25
+     .handle = default_handle,
+     .tear_down = default_teardown},
+
+
 #endif
 };
 
