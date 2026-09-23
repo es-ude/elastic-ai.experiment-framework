@@ -66,6 +66,9 @@ TaskDefinition task_definition_table[] = {
     {.setup = fast_setup_dataframe_echo,
      .handle = dataframe_echo,
      .tear_down = default_teardown},
+    {.setup = default_setup,
+     .handle = compute_sensor_data,
+     .tear_down = default_teardown}
 
 #endif
 };
