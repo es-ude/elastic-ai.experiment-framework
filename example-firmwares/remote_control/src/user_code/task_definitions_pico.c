@@ -140,6 +140,11 @@ void fast_setup_read_skeleton_id(TaskContext *task_context)
     read_skeletion_id(task_context);
 }
 
+void fast_setup_dataframe_echo(TaskContext *task_context)
+{
+    dataframe_echo(task_context);
+}
+
 void setup_start_timer(TaskContext *task_context)
 {
     task_context->user_data = malloc(sizeof(TimerUserDataStruct));
@@ -429,4 +434,14 @@ void periodic_task(TaskContext *task_context)
     {
         task_context->task_services.send_return(&task_context->task_services, 0, 0, false);
     }
+}
+
+void dataframe_echo(TaskContext *task_context)
+{
+    uint64_t current_time = time_us_64();
+    uint64_t timer_diff = current_time - task_context->timer_since_arrival_us;
+    task_context->task_services.send_data(&task_context->task_services, 0, (uint8_t *)&current_time, sizeof(uint64_t), false);
+    task_context->task_services.send_data(&task_context->task_services, 0, (uint8_t *)&task_context->timer_since_arrival_us, sizeof(uint64_t), false);
+    task_context->task_services.send_data(&task_context->task_services, 0, (uint8_t *)&timer_diff, sizeof(uint64_t), false);
+    task_context->task_services.send_data(&task_context->task_services, 0, task_context->input_data, task_context->input_data_len, false);
 }

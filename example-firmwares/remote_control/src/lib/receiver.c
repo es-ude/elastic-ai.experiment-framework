@@ -1,12 +1,17 @@
 #include "receiver.h"
 #include "msg_handler.h"
 #include "log.h"
+#include "transport.h"
+
+#ifdef PLATFORM_PICO
+#include "pico/time.h"
+#endif
 
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdio.h>
 
-bool frame_parser_feed(Receiver *p, uint8_t byte)
+bool frame_parser_feed(Receiver *p, uint8_t byte, uint64_t *timer)
 {
     switch (p->state)
     {
@@ -15,6 +20,11 @@ bool frame_parser_feed(Receiver *p, uint8_t byte)
         {
             p->frame.header.start_byte = byte;
             p->state = WAIT_TYPE;
+#ifdef PLATFORM_PICO
+            *timer = time_us_64();
+#else
+            *timer = transport_get_current_time_ms();
+#endif
         }
         break;
 
@@ -123,11 +133,11 @@ void process_rx(Receiver *rx, TaskManager *task_manager, Sender *tx)
     {
         LOG("[Receiver] Current state: %d, Received byte: 0x%02X\n", rx->state, byte);
 
-        if (frame_parser_feed(rx, byte))
+        if (frame_parser_feed(rx, byte, &rx->frame_start_time_us))
         {
             Frame frame = rx->frame;
 
-            handle_incoming_frame(rx->task_rb, &frame, task_manager, tx);
+            handle_incoming_frame(rx->task_rb, &frame, task_manager, tx, &rx->frame_start_time_us);
 
             rx->state = WAIT_START;
         }

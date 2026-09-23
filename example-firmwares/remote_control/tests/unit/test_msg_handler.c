@@ -71,7 +71,7 @@ void test_msg_open_task_creates_task(void)
 {
     Frame f = make_frame(OPEN_TASK, 1, 0, 0x01);
 
-    int id = msg_open_task(&f, &task_manager);
+    int id = msg_open_task(&f, &task_manager, NULL);
 
     TEST_ASSERT_TRUE(id > 0);
 
@@ -84,7 +84,7 @@ void test_msg_open_task_creates_task(void)
 void test_close_task(void)
 {
     Frame open = make_frame(OPEN_TASK, 4, 0, 0x00);
-    int id = msg_open_task(&open, &task_manager);
+    int id = msg_open_task(&open, &task_manager, NULL);
 
     TEST_ASSERT_EQUAL_INT(4, id);
     TEST_ASSERT_TRUE(get_task_by_id(id, &task_manager)->status != TASK_STATUS_IDLE);
@@ -116,7 +116,7 @@ void test_msg_data_chunk_routes_to_task(void)
     fake_called = 0;
 
     Frame open = make_frame(OPEN_TASK, 2, 0, 0x00);
-    int id = msg_open_task(&open, &task_manager);
+    int id = msg_open_task(&open, &task_manager, NULL);
 
     TEST_ASSERT_EQUAL_INT(2, id);
 
@@ -126,7 +126,7 @@ void test_msg_data_chunk_routes_to_task(void)
 
     Frame data = make_frame(DATA_CHUNK, id, 0, 0x99);
 
-    int ret = msg_data_chunk(&task_rb, &data, &task_manager);
+    int ret = msg_data_chunk(&task_rb, &data, &task_manager, NULL);
     TEST_ASSERT_EQUAL(id, ret);
 
     process_tasks(&task_rb, &out_rb, &task_manager);
@@ -138,7 +138,7 @@ void test_ack(void)
 {
     Frame f = make_frame(OPEN_TASK, 3, FLAG_NEED_ACK, 0x00);
 
-    handle_incoming_frame(&task_rb, &f, &task_manager, &tx);
+    handle_incoming_frame(&task_rb, &f, &task_manager, &tx, NULL);
 
     TEST_ASSERT_TRUE(ringbuffer_size(&out_rb) > 0);
     TEST_ASSERT_EQUAL(ACK, ((Frame *)out_rb.buffer)[0].header.message_type);
@@ -148,7 +148,7 @@ void test_nack_unknown_transaction_id(void)
 {
     Frame f = make_frame(DATA_CHUNK, 16, FLAG_NEED_ACK, 0x00);
 
-    handle_incoming_frame(&task_rb, &f, &task_manager, &tx);
+    handle_incoming_frame(&task_rb, &f, &task_manager, &tx, NULL);
 
     TEST_ASSERT_TRUE(ringbuffer_size(&out_rb) > 0);
     Frame *response = (Frame *)out_rb.buffer;
@@ -160,7 +160,7 @@ void test_nack_unknown_message_type(void)
 {
     Frame f = make_frame(0xFF, 16, FLAG_NEED_ACK, 0x00);
 
-    handle_incoming_frame(&task_rb, &f, &task_manager, &tx);
+    handle_incoming_frame(&task_rb, &f, &task_manager, &tx, NULL);
 
     TEST_ASSERT_TRUE(ringbuffer_size(&out_rb) > 0);
     Frame *response = (Frame *)out_rb.buffer;
@@ -172,7 +172,7 @@ void test_nack_unknown_function(void)
 {
     Frame f = make_frame(OPEN_TASK, 3, FLAG_NEED_ACK, 0xFF);
 
-    handle_incoming_frame(&task_rb, &f, &task_manager, &tx);
+    handle_incoming_frame(&task_rb, &f, &task_manager, &tx, NULL);
 
     TEST_ASSERT_TRUE(ringbuffer_size(&out_rb) > 0);
     Frame *response = (Frame *)out_rb.buffer;
@@ -186,7 +186,7 @@ void test_handle_incoming_frame_unknown_type_does_not_crash(void)
 {
     Frame f = make_frame(0xFF, 0, 0, 0x00);
 
-    handle_incoming_frame(&task_rb, &f, &task_manager, &tx);
+    handle_incoming_frame(&task_rb, &f, &task_manager, &tx, NULL);
 
     TEST_ASSERT_EQUAL(0, ringbuffer_size(&task_rb));
 }
@@ -197,7 +197,7 @@ void test_msg_data_chunk_invalid_task(void)
 {
     Frame f = make_frame(DATA_CHUNK, 255, 0, 0x00);
 
-    int ret = msg_data_chunk(&task_rb, &f, &task_manager);
+    int ret = msg_data_chunk(&task_rb, &f, &task_manager, NULL);
 
     TEST_ASSERT_EQUAL(-1, ret);
 }
@@ -205,7 +205,7 @@ void test_msg_data_chunk_invalid_task(void)
 void test_msg_open_and_close_task(void)
 {
     Frame f = make_frame(OPEN_TASK, 3, 0, 0x00);
-    int id = msg_open_task(&f, &task_manager);
+    int id = msg_open_task(&f, &task_manager, NULL);
     TEST_ASSERT_EQUAL_INT(3, id);
 
     Frame close = make_frame(CLOSE_TASK, id, 0, 0x00);

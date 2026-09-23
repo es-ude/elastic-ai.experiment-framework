@@ -455,6 +455,8 @@ class TestSerialClient:
         assert task.received_data[0] != data
 
 
+    #----------------------------- Test
+
     @pytest.mark.asyncio
     async def test_periodic(self, manager, monkeypatch):
         data = b"Hallo Welt!"
@@ -468,3 +470,18 @@ class TestSerialClient:
         await asyncio.sleep(10)
 
         assert task.received_data[0] == data
+
+    @pytest.mark.asyncio
+    async def test_dataframe_echo(self, manager, monkeypatch):
+        data = b"1"*0 # change to test different payload amounts
+
+        task = DummyTask(task_def_id=17, msg=data)
+        task.timeout = 0.1
+
+        await manager.open_task(task)
+        await manager.send_chunk(task, data)
+
+        await asyncio.sleep(1)
+
+        assert task.received_data[3] == data
+

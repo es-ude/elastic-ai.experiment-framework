@@ -63,6 +63,9 @@ TaskDefinition task_definition_table[] = {
     {.setup = default_setup,
      .handle = periodic_task,
      .tear_down = default_teardown},
+    {.setup = fast_setup_dataframe_echo,
+     .handle = dataframe_echo,
+     .tear_down = default_teardown},
 
 #endif
 };
