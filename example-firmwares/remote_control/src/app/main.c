@@ -52,8 +52,6 @@ int main(int argc, char *argv[])
         .outgoing_rb = &outgoing_rb,
         .msg_counter = {0}};
 
-    printf("[Server] Server was started\n");
-    fflush(stdout);
     while (1)
     {
         process_rx(&receiver, &task_manager, &sender);
