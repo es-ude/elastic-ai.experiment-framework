@@ -1,5 +1,6 @@
 {
   "version": 3,
+
   "configurePresets": [
     {
       "name": "host-debug",
@@ -10,6 +11,18 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "PLATFORM": "host"
       }
+    },
+    {
+      "name": "pico-debug",
+      "displayName": "Pico Debug Build",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/pico-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "PLATFORM": "pico",
+        "PICO_PLATFORM": "rp2040",
+        "CMAKE_TOOLCHAIN_FILE": "$env{PICO_SDK_PATH}/cmake/preload/toolchains/pico_arm_cortex_m0plus_gcc.cmake"
+      }
     }
   ],
 
@@ -17,8 +30,11 @@
     {
       "name": "host-debug",
       "configurePreset": "host-debug"
+    },
+    {
+      "name": "pico-debug",
+      "configurePreset": "pico-debug"
     }
-    
   ],
 
   "testPresets": [
@@ -29,6 +45,5 @@
         "outputOnFailure": true
       }
     }
-
   ]
 }
