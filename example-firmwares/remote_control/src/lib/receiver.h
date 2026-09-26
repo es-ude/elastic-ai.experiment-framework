@@ -35,7 +35,8 @@ typedef struct
         WAIT_MSG_ID,
         WAIT_LEN_L,
         WAIT_LEN_H,
-        WAIT_PAYLOAD
+        WAIT_PAYLOAD,
+        WAIT_CHECKSUM
     } state;
 
     RingBuffer *incoming_rb;
@@ -45,6 +46,7 @@ typedef struct
 
     uint16_t index; // payload index
     uint8_t len_bytes[2];
+    uint64_t frame_start_time_us;
 } Receiver;
 
 void process_rx(Receiver *rx, TaskManager *task_manager, Sender *tx);
