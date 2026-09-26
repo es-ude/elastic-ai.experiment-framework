@@ -11,7 +11,7 @@
 
 #define UNACKED_MSG_MAX_AMOUNT 16
 #define MAX_RETRY_COUNT 3
-#define ACK_TIMEOUT_S 1
+#define ACK_TIMEOUT_MS 1000
 
 typedef enum
 {

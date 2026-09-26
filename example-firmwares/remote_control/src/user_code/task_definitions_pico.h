@@ -22,3 +22,5 @@ void write_to_flash_from_remote(TaskContext *task_context);
 void read_skeletion_id(TaskContext *task_context);
 void predict(TaskContext *task_context);
 void get_flash_ones(TaskContext *task_context);
+
+void periodic_task(TaskContext *task_context);
