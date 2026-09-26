@@ -16,6 +16,7 @@
      pkgs.picotool
      pkgs.ty
      pkgs.pyrefly
+     pkgs.zlib
    ];
 
    languages.c.enable = true;
