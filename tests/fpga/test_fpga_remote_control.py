@@ -7,7 +7,6 @@ from elasticai.experiment_framework.env5.sync_fpga_remote_control import (
     SyncFPGARemoteControl,
 )
 
-logging.basicConfig(format="%(message)s")
 logger = logging.getLogger(__name__)
 
 BYTE_STREAM_PATH = Path("tests/fpga/env5_top_reconfig.bin")
@@ -25,8 +24,7 @@ def fpga_remote_control(flashed_pico, wait_for_device):
 def test_fpga_flashing(fpga_remote_control):
     fpga_remote_control.fpga_power_off()
     fpga_remote_control.upload_bitstream(
-        flash_sector=0,
-        path_to_bitstream=BYTE_STREAM_PATH,
+        flash_sector=0, path_to_bitstream=BYTE_STREAM_PATH, need_ack=True
     )
     fpga_remote_control.fpga_power_on()
     fpga_remote_control.read_skeleton_id()

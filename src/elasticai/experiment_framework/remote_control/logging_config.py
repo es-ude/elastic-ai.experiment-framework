@@ -15,8 +15,12 @@ DISABLED_LOGGERS = {
 
 class ShortNameFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        name = DISPLAY_NAMES.get(record.name, record.name)
-        return f"{record.levelname:<8} {name:<7} {record.getMessage()}"
+        name = DISPLAY_NAMES.get(record.name)
+
+        if name is not None:
+            return f"{record.levelname:<8} {name:<7} {record.getMessage()}"
+
+        return record.getMessage()
 
 
 class ExcludeRawTraffic(logging.Filter):

@@ -8,9 +8,18 @@ logger = logging.getLogger(__name__)
 
 
 class SimpleTask(Task):
-    def __init__(self, task_def_id: int, data: bytes = b""):
+    def __init__(
+        self,
+        task_def_id: int,
+        data: bytes = b"",
+        need_ack: bool = False,
+        has_crc: bool = False,
+    ):
         super().__init__(task_def_id)
+
         self._data = data
+        self.need_ack = need_ack
+        self.has_crc = has_crc
 
     @property
     def result(self) -> bytes:
@@ -26,23 +35,49 @@ class SimpleTask(Task):
 
 
 class FPGAInitTask(Task):
-    def __init__(self, task_def_id: int):
-        super().__init__(task_def_id=task_def_id)
+    def __init__(
+        self,
+        task_def_id: int,
+        need_ack: bool = False,
+        has_crc: bool = False,
+    ):
+        super().__init__(task_def_id)
+
+        self.need_ack = need_ack
+        self.has_crc = has_crc
 
 
 class FPGAWriteToFlashTask(Task):
-    def __init__(self, task_def_id: int, sector: int, data: bytes, chunk_size: int):
+    def __init__(
+        self,
+        task_def_id: int,
+        sector: int,
+        data: bytes,
+        chunk_size: int,
+        need_ack: bool = False,
+        has_crc: bool = False,
+    ):
         super().__init__(task_def_id)
+
         self._data = data
         self.chunk_size = chunk_size
         self.sector = sector
+        self.need_ack = need_ack
+        self.has_crc = has_crc
 
     async def on_opened(self):
-        yield SendChunk(int.to_bytes(self.sector, length=1, byteorder="little"))
+        yield SendChunk(
+            int.to_bytes(
+                self.sector,
+                length=1,
+                byteorder="little",
+            ),
+        )
 
         number_chunks = math.ceil(len(self._data) / self.chunk_size)
-        for i in range(0, number_chunks):
+
+        for i in range(number_chunks):
             pos = i * self.chunk_size
             chunk = self._data[pos : pos + self.chunk_size]
 
-            yield SendChunk(chunk, need_ack=True)
+            yield SendChunk(chunk)

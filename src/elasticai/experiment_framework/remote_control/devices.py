@@ -52,12 +52,24 @@ class _SerialDevice(Device):
         asyncio.set_event_loop(loop)
 
         ctx = self.connect()
-        stream = loop.run_until_complete(ctx.__aenter__())
+
         try:
-            yield stream
+            stream = loop.run_until_complete(ctx.__aenter__())
+
+            try:
+                yield stream
+            except BaseException as exc:
+                loop.run_until_complete(
+                    ctx.__aexit__(type(exc), exc, exc.__traceback__)
+                )
+                raise
+            else:
+                loop.run_until_complete(
+                    ctx.__aexit__(None, None, None)
+                )
         finally:
-            loop.run_until_complete(ctx.__aexit__(None, None, None))
             loop.close()
+            asyncio.set_event_loop(None)
 
 
 def probe_for_devices(specs: set[_DeviceSpec]) -> list[Device]:

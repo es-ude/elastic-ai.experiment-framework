@@ -113,6 +113,10 @@ def flashed_pico(build_pico_firmware):
     print("Pico flashed successfully", flush=True)
 
 
+if __name__== "__main__":
+    flashed_pico()
+    
+
 @pytest.fixture(scope="session")
 def wait_for_device(timeout=15):
     start = time.time()
@@ -128,3 +132,7 @@ def wait_for_device(timeout=15):
     print("waiting for device 2")
 
     raise RuntimeError("Pico did not re-enumerate")
+
+
+def test_flash_pico(flashed_pico):
+    pass

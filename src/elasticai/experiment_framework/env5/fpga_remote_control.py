@@ -1,9 +1,8 @@
 import logging
 from typing import override
 
-from elasticai.experiment_framework.remote_control.remote_control import RemoteControl
-
 from ..remote_control.io_stream import IOStream
+from ..remote_control.remote_control import RemoteControl
 from .config import BYTE_ORDER, TaskDefinitionIds
 from .tasks_registry import (
     FPGAInitTask,

@@ -31,15 +31,16 @@ static void stopCompute(void)
     FpgaMiddleware_write(fpga, cmd, COMPUTE_BYTE, 1);
 }
 
-static void eraseFlash(flashConfiguration_t *flashConfig, uint32_t startSector, uint32_t length)
+static uint8_t eraseFlash(flashConfiguration_t *flashConfig, uint32_t startSector, uint32_t length)
 {
     for (size_t index = 0;
          index <
          (size_t)ceilf((float)length / (float)flashGetBytesPerSector(flashConfig));
          index++)
     {
-        flashEraseSector(flashConfig,
-                         startSector + (index * flashGetBytesPerSector(flashConfig)));
+        uint8_t error_code = flashEraseSector(flashConfig,
+                                              startSector + (index * flashGetBytesPerSector(flashConfig)));
+        return error_code;
     }
 }
 
@@ -124,13 +125,16 @@ void fast_setup_fpga_power_off(TaskContext *task_context)
 
 void fast_setup_read_skeleton_id(TaskContext *task_context)
 {
-    read_skeletion_id(task_context);
+    read_skeleton_id(task_context);
 }
 
 // ---------------------------------------------------------------
 void hardware_init(TaskContext *task_context)
 {
-    init_hardware();
+    if (flashSpi.spiInstance == NULL)
+    {
+        init_hardware();
+    }
     uint16_t value = flashConfig.bytesPerPage;
 
     uint8_t data[2] = {
@@ -157,9 +161,15 @@ void fpga_power_off(TaskContext *task_context)
 
 void erase_fpga_flash(TaskContext *task_context)
 {
-    init_hardware();
     uint32_t amount_to_delete = 550000;
-    eraseFlash(&flashConfig, 0, amount_to_delete);
+    task_context->task_services.send_data(&task_context->task_services, 0, (uint8_t *)&flashConfig, 1, false);
+
+    uint8_t error_code = eraseFlash(&flashConfig, 0, amount_to_delete);
+    if (error_code != 0)
+    {
+        task_context->task_services.send_data(&task_context->task_services, 0, (uint8_t *)&error_code, 1, false);
+    }
+
     task_context->task_services.send_return(&task_context->task_services, 0, 0, false);
 }
 
@@ -226,17 +236,19 @@ void write_to_flash_from_remote(TaskContext *task_context)
 #define ADDR_MODEL_ID 0
 #define BYTES_MODEL_ID 16
 
-void read_skeletion_id(TaskContext *task_context)
+void read_skeleton_id(TaskContext *task_context)
 {
     uint8_t skeleton_id[16] = {0};
-    init_hardware();
     Fpga *fpga = Config_getFpga();
     if (!Fpga_isPoweredOn(fpga))
     {
         Fpga_powerOn(fpga);
         sleep_ms(100); // wait for FPGA to power up
+        char *msg = "power_fpga";
+        task_context->task_services.send_data(&task_context->task_services, 0, msg, 10, false);
     }
     FpgaMiddleware *fpga_middleware = Config_getFpgaMiddleware();
+
     FpgaMiddleware_init(fpga_middleware);
     FpgaMiddleware_enableUserLogic(fpga_middleware);
     FpgaMiddleware_read(fpga_middleware, skeleton_id, ADDR_MODEL_ID, BYTES_MODEL_ID);

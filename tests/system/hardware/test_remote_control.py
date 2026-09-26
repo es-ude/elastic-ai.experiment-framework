@@ -127,7 +127,7 @@ class DummyTask(Task):
 
 
 @pytest_asyncio.fixture()
-async def manager(flashed_pico):
+async def manager():
     subprocess.run(
         ["picotool", "reboot", "-f"],
         capture_output=True,
