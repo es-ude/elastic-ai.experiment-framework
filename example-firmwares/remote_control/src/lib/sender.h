@@ -7,6 +7,8 @@
 #include "transport.h"
 #include "task.h"
 
+#include <stdbool.h>
+
 #define UNACKED_MSG_MAX_AMOUNT 16
 #define MAX_RETRY_COUNT 3
 #define ACK_TIMEOUT_S 1
@@ -44,6 +46,7 @@ typedef struct
         TX_SEND_START,
         TX_SEND_HEADER,
         TX_SEND_PAYLOAD,
+        TX_SEND_CHECKSUM,
         TX_DONE
     } state;
 
@@ -65,7 +68,7 @@ void process_tx(Sender *tx);
 void on_ack(Sender *tx, uint8_t acked_msg_id);
 void on_nack(Sender *tx, uint8_t nacked_msg_id);
 
-uint8_t send_return(TaskServices *task_s, uint8_t flags, uint32_t return_code);
-uint8_t send_data(TaskServices *task_s, uint8_t flags, uint8_t *data, uint32_t data_len);
+uint8_t send_return(TaskServices *task_s, uint8_t flags, uint32_t return_code, bool add_checksum);
+uint8_t send_data(TaskServices *task_s, uint8_t flags, uint8_t *data, uint32_t data_len, bool add_checksum);
 
 #endif
