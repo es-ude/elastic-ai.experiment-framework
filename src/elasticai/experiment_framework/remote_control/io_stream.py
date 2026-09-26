@@ -1,8 +1,7 @@
-from abc import abstractmethod
-from typing import Protocol
+from abc import ABC, abstractmethod
 
 
-class IOStream(Protocol):
+class IOStream(ABC):
     @abstractmethod
     async def write(self, data: bytes | bytearray, /) -> int: ...
 

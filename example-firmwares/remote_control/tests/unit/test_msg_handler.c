@@ -5,6 +5,8 @@
 #include "frame.h"
 #include "msg_types.h"
 #include "sender.h"
+#include "frame_builder.h"
+#include "task_definitions.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -48,8 +50,7 @@ void setUp(void)
     ringbuffer_init(&task_rb, task_rb_storage, 1024, sizeof(Task *));
     ringbuffer_init(&out_rb, out_storage, 1024, sizeof(Frame));
 
-    init_task_manager(&out_rb, &task_manager);
-
+    init_task_manager(&out_rb, &task_manager, task_definition_table, task_definition_table_size);
     tx = (Sender){
         .transport = &transport_protocol,
         .outgoing_rb = &out_rb,
@@ -143,14 +144,40 @@ void test_ack(void)
     TEST_ASSERT_EQUAL(ACK, ((Frame *)out_rb.buffer)[0].header.message_type);
 }
 
-void test_nack(void)
+void test_nack_unknown_transaction_id(void)
 {
     Frame f = make_frame(DATA_CHUNK, 16, FLAG_NEED_ACK, 0x00);
 
     handle_incoming_frame(&task_rb, &f, &task_manager, &tx);
 
     TEST_ASSERT_TRUE(ringbuffer_size(&out_rb) > 0);
-    TEST_ASSERT_EQUAL(NACK, ((Frame *)out_rb.buffer)[0].header.message_type);
+    Frame *response = (Frame *)out_rb.buffer;
+    TEST_ASSERT_EQUAL(NACK, response[0].header.message_type);
+    TEST_ASSERT_EQUAL(NACK_CODE_UNKNOWN_TRANSACTION_ID, response[0].payload[0]);
+}
+
+void test_nack_unknown_message_type(void)
+{
+    Frame f = make_frame(0xFF, 16, FLAG_NEED_ACK, 0x00);
+
+    handle_incoming_frame(&task_rb, &f, &task_manager, &tx);
+
+    TEST_ASSERT_TRUE(ringbuffer_size(&out_rb) > 0);
+    Frame *response = (Frame *)out_rb.buffer;
+    TEST_ASSERT_EQUAL(NACK, response[0].header.message_type);
+    TEST_ASSERT_EQUAL(NACK_CODE_UNKNOWN_MESSAGE_TYPE, response[0].payload[0]);
+}
+
+void test_nack_unknown_function(void)
+{
+    Frame f = make_frame(OPEN_TASK, 3, FLAG_NEED_ACK, 0xFF);
+
+    handle_incoming_frame(&task_rb, &f, &task_manager, &tx);
+
+    TEST_ASSERT_TRUE(ringbuffer_size(&out_rb) > 0);
+    Frame *response = (Frame *)out_rb.buffer;
+    TEST_ASSERT_EQUAL(NACK, response[0].header.message_type);
+    TEST_ASSERT_EQUAL(NACK_CODE_UNKNOWN_FUNCTION, response[0].payload[0]);
 }
 
 /* -------- UNKNOWN MESSAGE -------- */
@@ -194,6 +221,17 @@ void test_msg_open_and_close_task(void)
     TEST_ASSERT_NULL(t->funcs);
 }
 
+void test_checksum(void)
+{
+    Frame f = make_frame(DATA_CHUNK, 1, FLAG_HAS_CRC, 0x99);
+
+    uint8_t checksum = crc8(
+        (uint8_t *)&f,
+        FRAME_OVERHEAD + f.header.payload_len);
+
+    TEST_ASSERT_EQUAL_UINT8(135, checksum);
+}
+
 /* =========================
  * MAIN
  * ========================= */
@@ -208,6 +246,8 @@ int main(void)
     RUN_TEST(test_msg_data_chunk_invalid_task);
     RUN_TEST(test_close_task);
     RUN_TEST(test_ack);
-    RUN_TEST(test_nack);
+    RUN_TEST(test_nack_unknown_transaction_id);
+    RUN_TEST(test_nack_unknown_message_type);
+    RUN_TEST(test_checksum);
     return UNITY_END();
 }
