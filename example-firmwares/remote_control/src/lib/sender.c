@@ -1,5 +1,6 @@
 #include "sender.h"
 #include "frame_builder.h"
+#include "log.h"
 
 #include <stdio.h>
 
@@ -115,13 +116,13 @@ bool add_to_unacked(Sender *tx, Frame *frame)
 
 void on_ack(Sender *tx, uint8_t acked_msg_id)
 {
-    printf("Received ACK for msg_id %d\n", acked_msg_id);
+    LOG("Received ACK for msg_id %d\n", acked_msg_id);
     for (int i = 0; i < UNACKED_MSG_MAX_AMOUNT; i++)
     {
         AckTracker *tracker = &(tx->ack_trackers[i]);
         if (tracker->used && tracker->seq == acked_msg_id)
         {
-            printf("Received ACK for msg_id %d\n", acked_msg_id);
+            LOG("Received ACK for msg_id %d\n", acked_msg_id);
             tracker->used = 0;
             break;
         }
@@ -160,7 +161,7 @@ void retransmit_unacked(Sender *tx, uint32_t current_time_s)
 
         if ((current_time_s - tracker->last_sent_ms) >= ACK_TIMEOUT_S)
         {
-            printf("Retransmitting unacked message with msg_id %d, retry_count: %d\n", tracker->seq, tracker->retry_count);
+            // printf("Retransmitting unacked message with msg_id %d, retry_count: %d\n", tracker->seq, tracker->retry_count);
 
             if (tracker->retry_count < MAX_RETRY_COUNT)
             {
