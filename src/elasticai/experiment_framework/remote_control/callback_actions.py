@@ -9,12 +9,12 @@ class NoAction:
 @dataclass
 class SendChunk:
     data: bytes
-    need_ack: bool = False
+    need_ack: bool | None = None
 
 
 @dataclass
 class CloseTask:
-    need_ack: bool = False
+    need_ack: bool | None = None
 
 
 CallbackAction = SendChunk | NoAction | CloseTask
