@@ -1,5 +1,7 @@
 #include "sender.h"
 #include "frame_builder.h"
+#include "log.h"
+#include "msg_types.h"
 
 #include <stdio.h>
 
@@ -35,7 +37,7 @@ void tx_process(Sender *tx)
         uint8_t transaction_id = tx->frame.header.transaction_id;
         send_byte(tx, transaction_id);
 
-        if (tx->is_retransmitting)
+        if (tx->is_retransmitting || tx->frame.header.message_type == ACK || tx->frame.header.message_type == NACK)
         {
             send_byte(tx, tx->frame.header.msg_id); // msg_id already exists
         }
@@ -60,9 +62,26 @@ void tx_process(Sender *tx)
         }
         else
         {
-            tx->state = TX_DONE;
+            if (tx->frame.header.flags & FLAG_HAS_CRC)
+            {
+                tx->state = TX_SEND_CHECKSUM;
+            }
+            else
+            {
+                tx->state = TX_DONE;
+            }
         }
         break;
+
+    case TX_SEND_CHECKSUM:
+    {
+        uint8_t crc = crc8(tx->frame.payload,
+                           tx->frame.header.payload_len);
+
+        send_byte(tx, crc);
+        tx->state = TX_DONE;
+        break;
+    }
 
     case TX_DONE:
         tx->state = TX_IDLE;
@@ -70,10 +89,10 @@ void tx_process(Sender *tx)
     }
 }
 
-uint8_t send_return(TaskServices *task_s, uint8_t flags, uint32_t return_code)
+uint8_t send_return(TaskServices *task_s, uint8_t flags, uint32_t return_code, bool add_checksum)
 {
     Frame frame = {0};
-    frame_builder_return(&frame, flags, return_code, task_s->task_id);
+    frame_builder_return(&frame, flags, return_code, task_s->task_id, add_checksum);
 
     OutgoingOrder order = {
         .frame = frame,
@@ -82,10 +101,10 @@ uint8_t send_return(TaskServices *task_s, uint8_t flags, uint32_t return_code)
     ringbuffer_push(task_s->outgoing_rb, &order);
 }
 
-uint8_t send_data(TaskServices *task_s, uint8_t flags, uint8_t *data, uint32_t data_len)
+uint8_t send_data(TaskServices *task_s, uint8_t flags, uint8_t *data, uint32_t data_len, bool add_checksum)
 {
     Frame frame = {0};
-    frame_builder_data_chunk(&frame, flags, data, data_len, task_s->task_id, 0, 0);
+    frame_builder_data_chunk(&frame, flags, data, data_len, task_s->task_id, 0, 0, add_checksum);
 
     OutgoingOrder order = {
         .frame = frame,
@@ -104,7 +123,7 @@ bool add_to_unacked(Sender *tx, Frame *frame)
             tracker->used = 1;
             tracker->seq = frame->header.msg_id;
             tracker->frame = *frame;
-            tracker->last_sent_ms = transport_get_current_time();
+            tracker->last_sent_ms = transport_get_current_time_ms();
             tracker->retry_count = 0;
             tracker->state = STATE_SENT;
             return true;
@@ -115,13 +134,13 @@ bool add_to_unacked(Sender *tx, Frame *frame)
 
 void on_ack(Sender *tx, uint8_t acked_msg_id)
 {
-    printf("Received ACK for msg_id %d\n", acked_msg_id);
+    LOG("Received ACK for msg_id %d\n", acked_msg_id);
     for (int i = 0; i < UNACKED_MSG_MAX_AMOUNT; i++)
     {
         AckTracker *tracker = &(tx->ack_trackers[i]);
         if (tracker->used && tracker->seq == acked_msg_id)
         {
-            printf("Received ACK for msg_id %d\n", acked_msg_id);
+            LOG("Received ACK for msg_id %d\n", acked_msg_id);
             tracker->used = 0;
             break;
         }
@@ -144,7 +163,7 @@ void on_nack(Sender *tx, uint8_t nacked_msg_id)
     }
 }
 
-void retransmit_unacked(Sender *tx, uint32_t current_time_s)
+void retransmit_unacked(Sender *tx, uint32_t current_time_ms)
 {
     for (int i = 0; i < UNACKED_MSG_MAX_AMOUNT; i++)
     {
@@ -156,16 +175,16 @@ void retransmit_unacked(Sender *tx, uint32_t current_time_s)
         if (tracker->state != STATE_SENT)
             continue;
 
-        // printf("Retransmit check for msg_id %d, last_sent_ms: %d, current_time_ms: %d, retry_count: %d\n", tracker->seq, tracker->last_sent_ms, current_time_s, tracker->retry_count);
+        // printf("Retransmit check for msg_id %d, last_sent_ms: %d, current_time_ms: %d, retry_count: %d\n", tracker->seq, tracker->last_sent_ms, current_time_ms, tracker->retry_count);
 
-        if ((current_time_s - tracker->last_sent_ms) >= ACK_TIMEOUT_S)
+        if ((current_time_ms - tracker->last_sent_ms) >= ACK_TIMEOUT_MS)
         {
-            printf("Retransmitting unacked message with msg_id %d, retry_count: %d\n", tracker->seq, tracker->retry_count);
+            // printf("Retransmitting unacked message with msg_id %d, retry_count: %d\n", tracker->seq, tracker->retry_count);
 
             if (tracker->retry_count < MAX_RETRY_COUNT)
             {
                 tracker->retry_count++;
-                tracker->last_sent_ms = current_time_s;
+                tracker->last_sent_ms = current_time_ms;
 
                 OutgoingOrder order = {
                     .frame = tracker->frame,
@@ -184,9 +203,8 @@ void retransmit_unacked(Sender *tx, uint32_t current_time_s)
 
 void process_tx(Sender *tx)
 {
-    tx->transport = tx->transport;
 
-    retransmit_unacked(tx, transport_get_current_time());
+    retransmit_unacked(tx, transport_get_current_time_ms());
 
     if (tx->state == TX_IDLE)
     {
@@ -194,12 +212,18 @@ void process_tx(Sender *tx)
 
         if (ringbuffer_pop(tx->outgoing_rb, &order))
         {
-            if (order.frame.header.flags & FLAG_NEED_ACK && !order.is_retransmit)
-            {
-                add_to_unacked(tx, &order.frame);
-            }
+
             tx_start(tx, &order.frame, order.is_retransmit); // start the parsing of the frame and sending it out
         }
     }
     tx_process(tx);
+    if (tx->state == TX_DONE)
+    {
+        if (tx->frame.header.flags & FLAG_NEED_ACK && !tx->is_retransmitting)
+        {
+            add_to_unacked(tx, &tx->frame);
+        }
+
+        tx->state = TX_IDLE;
+    }
 }
