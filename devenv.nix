@@ -16,6 +16,7 @@
      pkgs.picotool
      pkgs.ty
      pkgs.pyrefly
+     pkgs.zlib
    ];
 
    languages.c.enable = true;
@@ -87,7 +88,7 @@
 
     "check:integration_tests" = {
       exec = ''
-        ${uv_run} python -m pytest tests/integration
+        ${uv_run} python -m pytest tests/integration -m "not hardware"
       '';
     };
 

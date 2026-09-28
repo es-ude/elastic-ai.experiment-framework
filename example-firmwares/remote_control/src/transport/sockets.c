@@ -40,8 +40,6 @@ static void *socket_receive_thread(void *t)
                 sleep(1);
                 continue;
             }
-
-            printf("[Server] Client connected!\n");
         }
 
         // =========================
@@ -50,12 +48,8 @@ static void *socket_receive_thread(void *t)
         uint8_t b;
         ssize_t n = recv(s->clientfd, &b, 1, 0);
 
-        // printf("recv n=%ld errno=%d\n", n, errno);
-
         if (n > 0)
         {
-            // printf("[Server] Received byte: 0x%02X\n", b);
-
             ringbuffer_push(transport->incoming_rb, &b);
             continue;
         }
@@ -65,11 +59,11 @@ static void *socket_receive_thread(void *t)
         // =========================
         if (n == 0)
         {
-            printf("[Server] Client disconnected\n");
+            // client disconnected
         }
         else
         {
-            printf("[Server] recv error: %s\n", strerror(errno));
+            // error with connection
         }
 
         close(s->clientfd);
@@ -83,7 +77,6 @@ static void socket_send(Transport *t, uint8_t b)
 {
     SocketImpl *s = (SocketImpl *)t->impl;
 
-    printf("[Server] Sending byte: 0x%02X\n", b);
     send(s->clientfd, &b, 1, 0);
 }
 
@@ -156,6 +149,7 @@ void transport_init(Transport *buf, TransportConfig cfg)
 
 void transport_poll(Transport *transport)
 {
+    // already handled by thread here
 }
 
 uint64_t transport_get_current_time()
