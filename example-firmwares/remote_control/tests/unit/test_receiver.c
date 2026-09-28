@@ -119,6 +119,63 @@ void test_process_rx_rejects_too_large_payload(void)
     TEST_ASSERT_EQUAL(WAIT_START, rx.state);
 }
 
+void test_received_checksum(void)
+{
+    int size = 64;
+
+    uint8_t incoming_storage[64];
+    RingBuffer incoming;
+    ringbuffer_init(&incoming, incoming_storage, size, sizeof(uint8_t));
+
+    RingBuffer task_rb;
+
+    Receiver rx = {
+        .state = WAIT_START,
+        .incoming_rb = &incoming,
+        .task_rb = &task_rb};
+
+    uint8_t frame[] = {
+        0xAA,         // start
+        0x01,         // type
+        FLAG_HAS_CRC, // flags
+        0x42,         // tx id
+        0x00,
+        0x03, 0x00, // payload len = 3
+        0x11,
+        0x22,
+        0x33,
+        0x12}; // Checksum mockup
+
+    for (int i = 0; i < sizeof(frame); i++)
+    {
+        ringbuffer_push(&incoming, &frame[i]);
+    }
+
+    process_rx(&rx, &mock_task_manager, NULL);
+
+    TEST_ASSERT_TRUE(handler_called);
+
+    printf("rx.frame (%zu Bytes):\n", sizeof(rx.frame));
+    uint8_t *bytes = (uint8_t *)&rx.frame;
+
+    for (size_t i = 0; i < sizeof(rx.frame); i++)
+    {
+        printf("%02X ", bytes[i]);
+    }
+    printf("\n");
+
+    TEST_ASSERT_EQUAL_UINT8(0xAA, rx.frame.header.start_byte);
+    TEST_ASSERT_EQUAL_UINT8(0x01, rx.frame.header.message_type);
+    TEST_ASSERT_EQUAL_UINT8(FLAG_HAS_CRC, rx.frame.header.flags);
+    TEST_ASSERT_EQUAL_UINT8(0x42, rx.frame.header.transaction_id);
+    TEST_ASSERT_EQUAL_UINT8(0x00, rx.frame.header.msg_id);
+    TEST_ASSERT_EQUAL_UINT16(3, rx.frame.header.payload_len);
+
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(&frame[7],
+                                  rx.frame.payload,
+                                  4); // 3 Payload + CRC
+}
+
 /* =========================================================
  * MAIN
  * ========================================================= */
@@ -129,6 +186,7 @@ int main(void)
 
     RUN_TEST(test_process_rx_detects_complete_frame);
     RUN_TEST(test_process_rx_rejects_too_large_payload);
+    RUN_TEST(test_received_checksum);
 
     return UNITY_END();
 }

@@ -1,5 +1,5 @@
 import struct
-from enum import Enum
+from enum import IntEnum
 
 SYNC_BYTE = 0xAA
 HEADER_FORMAT = "<BBBBBH"
@@ -8,7 +8,9 @@ NUM_MAX_RETRIES = 3
 RETRY_DELAY_SECONDS = 1.0
 MAX_TASKS = 0xFF
 MAX_MESSAGE_PER_TASK = 0xFF
-MAX_PAYLOAD_lEN = 0xFFFF
+MAX_PAYLOAD_lEN = 1024
+NUM_BYTES_CHECKSUM: int = 1
+
 
 CONNECTION_TIMEOUT_SECONDS = 10
 
@@ -22,14 +24,24 @@ SUCCESS_CODE = 0x0
 FAILURE_CODE = 0x1
 
 
-class TransportType(Enum):
-    TCP = 0x01
-    UDP = 0x02
-    SERIAL = 0x03
-
-
 MAX_CONNECTED_DEVICES = 4
 
 NUM_BYTES_OFFSET_msg_id_IN_PAYLOAD = 0
 
 RETURN_CODE_OFFSET = 0
+
+SUCCESS_CODE = 0x0
+FAILURE_CODE = 0x1
+
+
+class NackErrorCode(IntEnum):
+    OUT_OF_RESSOURCE = 0x0  # e.g. queue full
+    UNEXPECTED_MESSAGE = 0x1  # e.g. task_id not recognized
+    INVALID_CHECKSUM = 0x2  # e.g. wrong checksum
+    INVALID_PAYLOAD = 0x3
+
+
+RETRYABLE_NACK_CODES = {
+    NackErrorCode.OUT_OF_RESSOURCE,
+    NackErrorCode.INVALID_CHECKSUM,
+}
