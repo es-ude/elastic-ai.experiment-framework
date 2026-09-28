@@ -15,7 +15,7 @@ foreach(test ${TESTS})
     )
 
     target_link_libraries(${name}_tests PRIVATE
-        remote_core
+        remote_lib
     )
 
     target_include_directories(${name}_tests PRIVATE
