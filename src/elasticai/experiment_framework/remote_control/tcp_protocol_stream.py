@@ -4,7 +4,9 @@ from typing import Callable, cast
 
 from .io_stream import IOStream
 
-_logger = logging.getLogger(__name__)
+_logger = logging.getLogger(
+    "elasticai.experiment_framework.remote_control.traffic.raw.outgoing"
+)
 
 
 class TCPProtocolStream(asyncio.Protocol, IOStream):
@@ -24,7 +26,9 @@ class TCPProtocolStream(asyncio.Protocol, IOStream):
             self._waiter.set_result(None)
 
     def connection_lost(self, exc: Exception | None) -> None:
-        return self._on_lost(exc)
+        if self._waiter is not None and not self._waiter.done():
+            self._waiter.set_exception(exc or ConnectionError("connection lost"))
+        self._on_lost(exc)
 
     async def read(self, num_bytes: int) -> bytes:
         while len(self._buffer) < num_bytes:
@@ -36,6 +40,9 @@ class TCPProtocolStream(asyncio.Protocol, IOStream):
         return bytes(result)
 
     async def write(self, data: bytes | bytearray) -> None:  # type: ignore[override]
+        if self.transport is None:
+            raise RuntimeError("write() called before connection established")
+
         _logger.debug(f"[CLIENT] write data  bytes {data}", stacklevel=2)
 
         self.transport.write(data)
