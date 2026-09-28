@@ -28,15 +28,15 @@ struct TaskServices
     RingBuffer *outgoing_rb;
     uint8_t task_id;
 
-    uint8_t (*send_return)(TaskServices *task_s, uint8_t flags, uint32_t return_code);
-    uint8_t (*send_data)(TaskServices *task_s, uint8_t flags, uint8_t *data, uint32_t data_len);
+    uint8_t (*send_return)(TaskServices *task_s, uint8_t flags, uint32_t return_code, bool add_checksum);
+    uint8_t (*send_data)(TaskServices *task_s, uint8_t flags, uint8_t *data, uint32_t data_len, bool add_checksum);
 };
 
 typedef struct
 {
     TaskServices task_services;
 
-    uint16_t step_index;
+    uint16_t step_counter;
 
     /* --- function execution --- */
     uint8_t input_data[TASK_BUFFER_LEN_BYTE];
@@ -44,6 +44,7 @@ typedef struct
     uint8_t output_data[TASK_BUFFER_LEN_BYTE];
     uint32_t output_data_len;
 
+    void *user_data;
 } TaskContext;
 
 typedef void (*Func)(TaskContext *task_context);

@@ -1,0 +1,24 @@
+#pragma once
+
+#include "task.h"
+
+void fast_setup_hardware_init(TaskContext *task_context);
+void fast_setup_fpga_power_on(TaskContext *task_context);
+void fast_setup_fpga_power_off(TaskContext *task_context);
+void fast_setup_read_skeleton_id(TaskContext *task_context);
+void setup_start_timer(TaskContext *task_context);
+
+void timer_check(TaskContext *task_context);
+void timer_string_echo(TaskContext *task_context);
+void timer_fpga_power_on(TaskContext *task_context);
+void timer_write_to_flash_from_remote(TaskContext *task_context);
+void timer_predict(TaskContext *task_context);
+
+void hardware_init(TaskContext *task_context);
+void fpga_power_on(TaskContext *task_context);
+void fpga_power_off(TaskContext *task_context);
+void erase_fpga_flash(TaskContext *task_context);
+void write_to_flash_from_remote(TaskContext *task_context);
+void read_skeletion_id(TaskContext *task_context);
+void predict(TaskContext *task_context);
+void get_flash_ones(TaskContext *task_context);
