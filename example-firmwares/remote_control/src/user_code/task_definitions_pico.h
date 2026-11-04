@@ -6,6 +6,7 @@ void fast_setup_hardware_init(TaskContext *task_context);
 void fast_setup_fpga_power_on(TaskContext *task_context);
 void fast_setup_fpga_power_off(TaskContext *task_context);
 void fast_setup_read_skeleton_id(TaskContext *task_context);
+void fast_setup_reset_fpga(TaskContext *task_context);
 
 void hardware_init(TaskContext *task_context);
 void fpga_power_on(TaskContext *task_context);
@@ -18,3 +19,5 @@ void predict(TaskContext *task_context);
 void get_flash_ones(TaskContext *task_context);
 
 void compute_sensor_data(TaskContext *task_context);
+
+void reset_fpga(TaskContext *task_context);

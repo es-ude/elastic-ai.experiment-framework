@@ -27,7 +27,7 @@ TaskDefinition task_definition_table[] = {
     {.setup = fast_setup_fpga_power_on,
      .handle = fpga_power_on,
      .tear_down = default_teardown},
-    {.setup = fast_setup_fpga_power_off,
+    {.setup = fast_setup_fpga_power_off, // 5
      .handle = fpga_power_off,
      .tear_down = default_teardown},
     {.setup = default_setup,
@@ -45,9 +45,12 @@ TaskDefinition task_definition_table[] = {
     {.setup = default_setup, // 10
      .handle = erase_fpga_flash,
      .tear_down = default_teardown},
-    
+
     {.setup = default_setup,
      .handle = compute_sensor_data,
+     .tear_down = default_teardown},
+    {.setup = fast_setup_reset_fpga,
+     .handle = reset_fpga,
      .tear_down = default_teardown}
 
 #endif

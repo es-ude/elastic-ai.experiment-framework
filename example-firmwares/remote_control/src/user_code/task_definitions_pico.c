@@ -5,9 +5,11 @@
 #include "config/config.h"
 #include "eai/flash/Flash.h"
 #include "hardware_functions/Fpga.h"
+#include "hardware_functions/PicoFpga.h"
 
 #include "eai/hal/EnV5HwConfiguration.h"
 #include "eai/hal/EnV5HwController.h"
+#include "hardware/gpio.h"
 #include "pico/time.h"
 
 #include <stdint.h>
@@ -131,6 +133,11 @@ void fast_setup_fpga_power_off(TaskContext *task_context)
 void fast_setup_read_skeleton_id(TaskContext *task_context)
 {
     read_skeleton_id(task_context);
+}
+
+void fast_setup_reset_fpga(TaskContext *task_context)
+{
+    reset_fpga(task_context);
 }
 
 // ---------------------------------------------------------------
@@ -338,4 +345,17 @@ void compute_sensor_data(TaskContext *task_context)
     }
 
     task_context->step_counter++;
+}
+
+void reset_fpga(TaskContext *task_context)
+{
+    Fpga *fpga = Config_getFpga();
+
+    gpio_put(fpga->pins->reset, 1);
+    Fpga_powerOff(fpga);
+    sleep_ms(100); // wait for FPGA to power down
+    Fpga_powerOn(fpga);
+    sleep_ms(100); // wait for FPGA to power up
+    gpio_put(fpga->pins->reset, 0);
+    task_context->task_services.send_return(&task_context->task_services, 0, 0, false);
 }
