@@ -332,3 +332,19 @@ class TestSerialClient:
         await asyncio.sleep(0.3)
 
         assert b"\x01" == task.received_data[1]
+
+
+    @pytest.mark.asyncio
+    async def test_get_task_names(self, manager):
+        data = b"send_mirror_reply"
+
+        task = DummyTask(task_def_id=12, msg=data)
+        task.timeout = 0.1
+
+        await manager.open_task(task)
+        await manager.send_chunk(task, data)
+
+        await asyncio.sleep(10)
+
+        assert task.received_data[0] == data
+

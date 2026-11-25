@@ -15,6 +15,8 @@
 #include <stdlib.h>
 #include <math.h>
 
+#include <string.h>
+
 #define USER_LOGIC_START_ADDRESS 18
 #define COMPUTE_BYTE 16
 
@@ -291,5 +293,16 @@ void get_flash_ones(TaskContext *task_context)
     uint32_t ones = count_flash_ones(task_context, 1024);
 
     task_context->task_services.send_data(&task_context->task_services, 0, (uint8_t *)&ones, 4, false);
+    task_context->task_services.send_return(&task_context->task_services, 0, 0, false);
+}
+
+void get_task_names(TaskContext *task_context)
+{
+    // Sends the name of all tasks. Each in a seperate frame to avoid buffer overflow issues with name length.
+    for (size_t i = 0; i < task_context->task_services.user_tasks_array_size; i++)
+    {
+        TaskDefinition *task_def = &task_context->task_services.user_tasks_array[i];
+        task_context->task_services.send_data(&task_context->task_services, 0, (uint8_t *)task_def->name, strlen(task_def->name), false);
+    }
     task_context->task_services.send_return(&task_context->task_services, 0, 0, false);
 }

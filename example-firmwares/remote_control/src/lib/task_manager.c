@@ -77,6 +77,10 @@ bool init_task(Task *task, Frame *frame, TaskManager *task_manager)
     task->task_definition_id = frame->payload[0]; // First Byte determines called function ID
 
     task->funcs = get_task_definition(task->task_definition_id);
+
+    task->ctx.task_services.user_tasks_array = user_task_defintions.task_definitions;
+    task->ctx.task_services.user_tasks_array_size = user_task_defintions.size;
+
     if (task->funcs == NULL)
     {
         perror("No valid function id");

@@ -6,48 +6,27 @@
 
 #include "task_definition_host.h"
 
+#define TASK_DEFINITION_TABLE_ENTRY(psetup, phandle, pteardown) \
+    {.setup = psetup, .handle = phandle, .tear_down = pteardown, .name = #phandle}
+
 // Contains the functions that should be callable from the client_protocol via execute_function,
 // position determines function_id
 
 TaskDefinition task_definition_table[] = {
-    {.setup = default_setup,
-     .tear_down = default_teardown,
-     .handle = send_mirror_reply},
-    {.setup = default_setup,
-     .tear_down = default_teardown,
-     .handle = func1},
-    {.setup = default_setup,
-     .handle = request_ack_from_pc,
-     .tear_down = default_teardown}
+    TASK_DEFINITION_TABLE_ENTRY(default_setup, send_mirror_reply, default_teardown),
+    TASK_DEFINITION_TABLE_ENTRY(default_setup, func1, default_teardown),
+    TASK_DEFINITION_TABLE_ENTRY(default_setup, request_ack_from_pc, default_teardown),
 #ifdef PLATFORM_PICO
-    ,
-    {.setup = fast_setup_hardware_init,
-     .handle = hardware_init,
-     .tear_down = default_teardown},
-    {.setup = fast_setup_fpga_power_on,
-     .handle = fpga_power_on,
-     .tear_down = default_teardown},
-    {.setup = fast_setup_fpga_power_off,
-     .handle = fpga_power_off,
-     .tear_down = default_teardown},
-    {.setup = default_setup,
-     .handle = write_to_flash_from_remote,
-     .tear_down = default_teardown},
-    {.setup = fast_setup_read_skeleton_id,
-     .handle = read_skeletion_id,
-     .tear_down = default_teardown},
-    {.setup = default_setup,
-     .handle = predict,
-     .tear_down = default_teardown},
-    {.setup = default_setup,
-     .handle = write_to_flash,
-     .tear_down = default_teardown},
-    {.setup = default_setup,
-     .handle = erase_fpga_flash,
-     .tear_down = default_teardown},
-    {.setup = default_setup,
-     .handle = get_flash_ones,
-     .tear_down = default_teardown}
+    TASK_DEFINITION_TABLE_ENTRY(fast_setup_hardware_init, hardware_init, default_teardown),
+    TASK_DEFINITION_TABLE_ENTRY(fast_setup_fpga_power_on, fpga_power_on, default_teardown),
+    TASK_DEFINITION_TABLE_ENTRY(fast_setup_fpga_power_off, fpga_power_off, default_teardown), // 5
+    TASK_DEFINITION_TABLE_ENTRY(default_setup, write_to_flash_from_remote, default_teardown),
+    TASK_DEFINITION_TABLE_ENTRY(fast_setup_read_skeleton_id, read_skeletion_id, default_teardown),
+    TASK_DEFINITION_TABLE_ENTRY(default_setup, predict, default_teardown),
+    TASK_DEFINITION_TABLE_ENTRY(default_setup, write_to_flash, default_teardown),
+    TASK_DEFINITION_TABLE_ENTRY(default_setup, erase_fpga_flash, default_teardown), // 10
+    TASK_DEFINITION_TABLE_ENTRY(default_setup, get_flash_ones, default_teardown),
+    TASK_DEFINITION_TABLE_ENTRY(default_setup, get_task_names, default_teardown)
 #endif
 };
 
