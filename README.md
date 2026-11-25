@@ -138,3 +138,9 @@ If you're using `devenv`, you can create a file called `devenv.local.nix` with c
 
 Make sure to gitignore that file so you don't accidentally push it.
 Also note that the exact variables may also depend on the concrete synthesis you are running.
+
+## Further Readme
+
+[C Readme](/example-firmwares/remote_control/README.md)
+
+[Python & CLI Readme](/src/elasticai/experiment_framework/README.md)
