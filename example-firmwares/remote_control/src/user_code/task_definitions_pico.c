@@ -31,16 +31,14 @@ static void stopCompute(void)
     FpgaMiddleware_write(fpga, cmd, COMPUTE_BYTE, 1);
 }
 
-static void eraseFlash(flashConfiguration_t *flashConfig, uint32_t startSector, uint32_t length)
+static void eraseFlashAll(flashConfiguration_t *flashConfig)
 {
-    for (size_t index = 0;
-         index <
-         (size_t)ceilf((float)length / (float)flashGetBytesPerSector(flashConfig));
-         index++)
-    {
-        flashEraseSector(flashConfig,
-                         startSector + (index * flashGetBytesPerSector(flashConfig)));
-    }
+    flashEraseAll(flashConfig);
+}
+
+static void eraseFlashPage(flashConfiguration_t *flashConfig, uint32_t startAddress)
+{
+    flashWritePage(flashConfig, startAddress, NULL, 0);
 }
 
 uint32_t flashWriteBitstream(
@@ -127,6 +125,11 @@ void fast_setup_read_skeleton_id(TaskContext *task_context)
     read_skeletion_id(task_context);
 }
 
+void fast_setup_erase_flash_all(TaskContext *task_context)
+{
+    erase_flash_all(task_context);
+}
+
 // ---------------------------------------------------------------
 void hardware_init(TaskContext *task_context)
 {
@@ -155,11 +158,18 @@ void fpga_power_off(TaskContext *task_context)
     task_context->task_services.send_return(&task_context->task_services, 0, 0, false);
 }
 
-void erase_fpga_flash(TaskContext *task_context)
+void erase_flash_all(TaskContext *task_context)
 {
     init_hardware();
-    uint32_t amount_to_delete = 550000;
-    eraseFlash(&flashConfig, 0, amount_to_delete);
+    eraseFlashAll(&flashConfig);
+    task_context->task_services.send_return(&task_context->task_services, 0, 0, false);
+}
+
+void erase_flash_page(TaskContext *task_context)
+{
+    init_hardware();
+    uint32_t startAddress = task_context->input_data[0] << 24 | task_context->input_data[1] << 16 | task_context->input_data[2] << 8 | task_context->input_data[3];
+    eraseFlashPage(&flashConfig, startAddress);
     task_context->task_services.send_return(&task_context->task_services, 0, 0, false);
 }
 
