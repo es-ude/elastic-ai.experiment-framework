@@ -43,10 +43,13 @@ TaskDefinition task_definition_table[] = {
      .handle = write_to_flash,
      .tear_down = default_teardown},
     {.setup = default_setup,
-     .handle = erase_fpga_flash,
+     .handle = get_flash_ones,
+     .tear_down = default_teardown},
+    {.setup = fast_setup_erase_flash_all,
+     .handle = erase_flash_all,
      .tear_down = default_teardown},
     {.setup = default_setup,
-     .handle = get_flash_ones,
+     .handle = erase_flash_page,
      .tear_down = default_teardown}
 #endif
 };

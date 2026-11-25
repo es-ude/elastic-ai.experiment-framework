@@ -6,12 +6,13 @@ void fast_setup_hardware_init(TaskContext *task_context);
 void fast_setup_fpga_power_on(TaskContext *task_context);
 void fast_setup_fpga_power_off(TaskContext *task_context);
 void fast_setup_read_skeleton_id(TaskContext *task_context);
+void fast_setup_erase_flash_all(TaskContext *task_context);
 
 void hardware_init(TaskContext *task_context);
 void fpga_power_on(TaskContext *task_context);
 void fpga_power_off(TaskContext *task_context);
-void write_to_flash(TaskContext *task_context);
-void erase_fpga_flash(TaskContext *task_context);
+void erase_flash_all(TaskContext *task_context);
+void erase_flash_page(TaskContext *task_context);
 void write_to_flash_from_remote(TaskContext *task_context);
 void read_skeletion_id(TaskContext *task_context);
 void predict(TaskContext *task_context);
