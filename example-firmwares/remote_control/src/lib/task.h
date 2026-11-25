@@ -9,6 +9,7 @@
 
 typedef struct Task Task;
 typedef struct TaskServices TaskServices;
+typedef struct TaskContext TaskContext;
 
 #define TASK_BUFFER_LEN_BYTE 1024
 #define MAX_TASKS 32
@@ -23,16 +24,28 @@ typedef enum
 
 } TaskStatus;
 
+typedef void (*Func)(TaskContext *task_context);
+
+typedef struct
+{
+    Func setup;
+    Func handle;
+    Func tear_down;
+    char *name;
+} TaskDefinition;
+
 struct TaskServices
 {
     RingBuffer *outgoing_rb;
     uint8_t task_id;
+    TaskDefinition *user_tasks_array;
+    uint8_t user_tasks_array_size;
 
     uint8_t (*send_return)(TaskServices *task_s, uint8_t flags, uint32_t return_code, bool add_checksum);
     uint8_t (*send_data)(TaskServices *task_s, uint8_t flags, uint8_t *data, uint32_t data_len, bool add_checksum);
 };
 
-typedef struct
+struct TaskContext
 {
     TaskServices task_services;
 
@@ -45,16 +58,7 @@ typedef struct
     uint32_t output_data_len;
 
     void *user_data;
-} TaskContext;
-
-typedef void (*Func)(TaskContext *task_context);
-
-typedef struct
-{
-    Func setup;
-    Func handle;
-    Func tear_down;
-} TaskDefinition;
+};
 
 struct Task
 {
